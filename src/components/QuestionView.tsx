@@ -39,11 +39,18 @@ export function QuestionView({
   const answered = !!answer;
   const isLast = index + 1 >= total;
 
+  const isMaruBatsu = useMemo(() => {
+    if (question.choices.length !== 2) return false;
+    const texts = question.choices.map((c) => c.text).sort();
+    return texts[0] === "正しい" && texts[1] === "誤り";
+  }, [question.choices]);
+
   const shuffledChoices = useMemo(() => {
+    if (isMaruBatsu) return question.choices;
     return [...question.choices]
       .map((c) => ({ ...c, _sort: Math.random() }))
       .sort((a, b) => a._sort - b._sort);
-  }, [question.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [question.id, isMaruBatsu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const recentHistory = question.answerHistories || [];
   const progressPercent = ((index + (answered ? 1 : 0)) / total) * 100;
@@ -98,43 +105,87 @@ export function QuestionView({
         </div>
 
         {/* Choices */}
-        <div className="space-y-2 px-5 pb-5">
-          {shuffledChoices.map((choice) => {
-            const isChosen = answer?.chosenChoiceId === choice.id;
-            let style = "border-gray-200 hover:border-primary-300 hover:bg-primary-50";
-            if (answered) {
-              if (choice.isCorrect) {
-                style = "border-green-400 bg-green-50";
-              } else if (isChosen && !choice.isCorrect) {
-                style = "border-red-400 bg-red-50";
-              } else {
-                style = "border-gray-200 opacity-60";
+        {isMaruBatsu ? (
+          <div className="grid grid-cols-2 gap-3 px-5 pb-5">
+            {question.choices
+              .slice()
+              .sort((a, b) => (a.text === "正しい" ? -1 : 1))
+              .map((choice) => {
+                const isChosen = answer?.chosenChoiceId === choice.id;
+                const isCorrectChoice = choice.text === "正しい";
+                let style = isCorrectChoice
+                  ? "border-primary-200 hover:border-primary-400 hover:bg-primary-50"
+                  : "border-gray-200 hover:border-red-300 hover:bg-red-50";
+                if (answered) {
+                  if (isChosen && answer.isCorrect) {
+                    style = "border-green-400 bg-green-50 ring-2 ring-green-300";
+                  } else if (isChosen && !answer.isCorrect) {
+                    style = "border-red-400 bg-red-50 ring-2 ring-red-300";
+                  } else if (choice.isCorrect) {
+                    style = "border-green-400 bg-green-50";
+                  } else {
+                    style = "border-gray-200 opacity-40";
+                  }
+                }
+                return (
+                  <button
+                    key={choice.id}
+                    disabled={answered}
+                    onClick={() => onAnswer(choice.id)}
+                    className={`flex flex-col items-center gap-1 rounded-xl border-2 py-5 text-center font-bold transition-all ${style}`}
+                  >
+                    <span className={`text-3xl ${answered
+                      ? (isChosen && answer.isCorrect ? "text-green-500" : isChosen ? "text-red-500" : choice.isCorrect ? "text-green-500" : "text-gray-300")
+                      : isCorrectChoice ? "text-primary-400" : "text-gray-400"
+                    }`}>
+                      {isCorrectChoice ? "○" : "×"}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      {choice.text}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        ) : (
+          <div className="space-y-2 px-5 pb-5">
+            {shuffledChoices.map((choice) => {
+              const isChosen = answer?.chosenChoiceId === choice.id;
+              let style = "border-gray-200 hover:border-primary-300 hover:bg-primary-50";
+              if (answered) {
+                if (choice.isCorrect) {
+                  style = "border-green-400 bg-green-50";
+                } else if (isChosen && !choice.isCorrect) {
+                  style = "border-red-400 bg-red-50";
+                } else {
+                  style = "border-gray-200 opacity-60";
+                }
               }
-            }
 
-            return (
-              <button
-                key={choice.id}
-                disabled={answered}
-                onClick={() => onAnswer(choice.id)}
-                className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors ${style}`}
-              >
-                {answered ? (
-                  choice.isCorrect ? (
-                    <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
-                  ) : isChosen ? (
-                    <XCircle className="h-5 w-5 shrink-0 text-red-500" />
+              return (
+                <button
+                  key={choice.id}
+                  disabled={answered}
+                  onClick={() => onAnswer(choice.id)}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors ${style}`}
+                >
+                  {answered ? (
+                    choice.isCorrect ? (
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-green-500" />
+                    ) : isChosen ? (
+                      <XCircle className="h-5 w-5 shrink-0 text-red-500" />
+                    ) : (
+                      <Square className="h-5 w-5 shrink-0 text-gray-300" />
+                    )
                   ) : (
                     <Square className="h-5 w-5 shrink-0 text-gray-300" />
-                  )
-                ) : (
-                  <Square className="h-5 w-5 shrink-0 text-gray-300" />
-                )}
-                <span>{choice.text}</span>
-              </button>
-            );
-          })}
-        </div>
+                  )}
+                  <span>{choice.text}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Answer feedback */}

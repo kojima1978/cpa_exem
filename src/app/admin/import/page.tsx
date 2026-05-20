@@ -1,18 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import { Upload, Download, FileJson, FileSpreadsheet, FileDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  Upload,
+  FileJson,
+  FileSpreadsheet,
+  FileDown,
+  FileText,
+} from "lucide-react";
+import type { TopicData } from "@/types";
+
+type ImportResult = {
+  imported: number;
+  errors: string[];
+  total: number;
+};
+
+const IMPORT_MODES = [
+  { value: "file", label: "ファイル" },
+  { value: "text", label: "JSON入力" },
+  { value: "marubatsu", label: "○×テキスト" },
+] as const;
+
+type ImportMode = (typeof IMPORT_MODES)[number]["value"];
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [jsonText, setJsonText] = useState("");
-  const [result, setResult] = useState<{
-    imported: number;
-    errors: string[];
-    total: number;
-  } | null>(null);
+  const [mbText, setMbText] = useState("");
+  const [mbTopicId, setMbTopicId] = useState("");
+  const [topics, setTopics] = useState<TopicData[]>([]);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
-  const [mode, setMode] = useState<"file" | "text">("file");
+  const [mode, setMode] = useState<ImportMode>("marubatsu");
+
+  useEffect(() => {
+    fetch("/api/topics")
+      .then((r) => r.json())
+      .then(setTopics);
+  }, []);
 
   const downloadTemplate = () => {
     const header =
@@ -46,18 +72,13 @@ export default function ImportPage() {
     if (!file) return;
     setImporting(true);
     setResult(null);
-
     const isCSV = file.name.endsWith(".csv");
     const body = await file.text();
-
     const res = await fetch("/api/questions/import", {
       method: "POST",
-      headers: {
-        "Content-Type": isCSV ? "text/csv" : "application/json",
-      },
+      headers: { "Content-Type": isCSV ? "text/csv" : "application/json" },
       body,
     });
-
     setResult(await res.json());
     setImporting(false);
   };
@@ -66,13 +87,24 @@ export default function ImportPage() {
     if (!jsonText.trim()) return;
     setImporting(true);
     setResult(null);
-
     const res = await fetch("/api/questions/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: jsonText,
     });
+    setResult(await res.json());
+    setImporting(false);
+  };
 
+  const handleMaruBatsuImport = async () => {
+    if (!mbText.trim() || !mbTopicId) return;
+    setImporting(true);
+    setResult(null);
+    const res = await fetch("/api/questions/import-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: mbText, topicId: Number(mbTopicId) }),
+    });
     setResult(await res.json());
     setImporting(false);
   };
@@ -81,33 +113,27 @@ export default function ImportPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-bold">インポート / エクスポート</h1>
 
+      {/* Import section */}
       <div className="rounded-xl border bg-white p-5 shadow-sm">
         <h2 className="font-bold">インポート</h2>
 
         <div className="mt-3 flex gap-2">
-          <button
-            onClick={() => setMode("file")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-              mode === "file"
-                ? "bg-primary-500 text-white"
-                : "border text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            ファイル
-          </button>
-          <button
-            onClick={() => setMode("text")}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-              mode === "text"
-                ? "bg-primary-500 text-white"
-                : "border text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            テキスト入力
-          </button>
+          {IMPORT_MODES.map((m) => (
+            <button
+              key={m.value}
+              onClick={() => { setMode(m.value); setResult(null); }}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                mode === m.value
+                  ? "bg-primary-500 text-white"
+                  : "border text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
 
-        {mode === "file" ? (
+        {mode === "file" && (
           <div className="mt-4">
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-8 hover:border-primary-400">
               <Upload className="h-8 w-8 text-gray-400" />
@@ -129,7 +155,9 @@ export default function ImportPage() {
               {importing ? "インポート中..." : "インポート実行"}
             </button>
           </div>
-        ) : (
+        )}
+
+        {mode === "text" && (
           <div className="mt-4">
             <textarea
               rows={12}
@@ -145,6 +173,63 @@ export default function ImportPage() {
             >
               {importing ? "インポート中..." : "インポート実行"}
             </button>
+          </div>
+        )}
+
+        {mode === "marubatsu" && (
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                分野（章）
+              </label>
+              <select
+                value={mbTopicId}
+                onChange={(e) => setMbTopicId(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="">選択してください</option>
+                {topics.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                問題＋解答テキスト
+              </label>
+              <textarea
+                rows={16}
+                value={mbText}
+                onChange={(e) => setMbText(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
+                placeholder={`1.財務会計の機能\nロロロ 問題1 重要度A H22過去問\n金融商品取引法は…\n\nロロロ 問題1 正しい\n解説文…`}
+              />
+            </div>
+            <button
+              onClick={handleMaruBatsuImport}
+              disabled={!mbText.trim() || !mbTopicId || importing}
+              className="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+            >
+              <FileText className="h-4 w-4" />
+              {importing ? "インポート中..." : "○×問題をインポート"}
+            </button>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-medium text-amber-800">テキスト形式</p>
+              <pre className="mt-1 whitespace-pre-wrap text-xs text-amber-700">{`[セクション] 1.財務会計の機能
+[問題] ロロロ 問題1 重要度A H22過去問
+       問題文（複数行可）
+[解答] ロロロ 問題1 正しい
+       解説文（複数行可）
+[補足] 追加でチェック！
+       補足説明文`}</pre>
+              <ul className="mt-2 space-y-0.5 text-xs text-amber-600">
+                <li>• セクション → 学習単位として自動登録</li>
+                <li>• 重要度A/B/C → 難易度 難/標準/易</li>
+                <li>• H22→2010, R4→2022（年度自動変換）</li>
+                <li>• 選択肢は「正しい」「誤り」の2択で自動作成</li>
+              </ul>
+            </div>
           </div>
         )}
 
@@ -167,11 +252,10 @@ export default function ImportPage() {
         )}
       </div>
 
+      {/* Export section */}
       <div className="rounded-xl border bg-white p-5 shadow-sm">
         <h2 className="font-bold">エクスポート</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          登録済みの問題をダウンロード
-        </p>
+        <p className="mt-1 text-sm text-gray-500">登録済みの問題をダウンロード</p>
         <div className="mt-3 flex gap-3">
           <a
             href="/api/questions/export?format=json"
@@ -190,6 +274,7 @@ export default function ImportPage() {
         </div>
       </div>
 
+      {/* CSV Template section */}
       <div className="rounded-xl border bg-white p-5 shadow-sm">
         <h2 className="font-bold">CSVテンプレート</h2>
         <p className="mt-1 text-sm text-gray-500">
