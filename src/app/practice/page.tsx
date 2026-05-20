@@ -144,6 +144,7 @@ export default function PracticePage() {
     );
     return (
       <QuestionView
+        key={currentQuestion.id}
         question={currentQuestion}
         index={currentIndex}
         total={questions.length}

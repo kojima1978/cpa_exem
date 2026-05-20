@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, Download, FileJson, FileSpreadsheet } from "lucide-react";
+import { Upload, Download, FileJson, FileSpreadsheet, FileDown } from "lucide-react";
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -13,6 +13,34 @@ export default function ImportPage() {
   } | null>(null);
   const [importing, setImporting] = useState(false);
   const [mode, setMode] = useState<"file" | "text">("file");
+
+  const downloadTemplate = () => {
+    const header =
+      "topic,session,text,difficulty,briefExplanation,detailedExplanation,year,choice1,choice2,choice3,choice4,choice5,correct";
+    const sample = [
+      '"簿記"',
+      '"企業会計原則"',
+      '"次のうち、棚卸資産の評価方法として認められていないものはどれか。"',
+      "2",
+      '"正解は後入先出法。企業会計基準第9号により廃止された。"',
+      '"企業会計基準第9号「棚卸資産の評価に関する会計基準」により、後入先出法は2010年4月以降適用の事業年度から廃止された。"',
+      "2024",
+      '"先入先出法"',
+      '"移動平均法"',
+      '"後入先出法"',
+      '"総平均法"',
+      "",
+      "3",
+    ].join(",");
+    const csv = "﻿" + header + "\n" + sample + "\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cpa-exam-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleFileImport = async () => {
     if (!file) return;
@@ -163,16 +191,31 @@ export default function ImportPage() {
       </div>
 
       <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <h2 className="font-bold">CSV形式について</h2>
+        <h2 className="font-bold">CSVテンプレート</h2>
         <p className="mt-1 text-sm text-gray-500">
-          以下のヘッダーを使用してください:
+          サンプル行付きのテンプレートをダウンロードして、そのまま編集・インポートできます。
         </p>
-        <code className="mt-2 block overflow-x-auto rounded bg-gray-100 p-3 text-xs">
-          topic,session,text,difficulty,briefExplanation,detailedExplanation,year,choice1,choice2,choice3,choice4,choice5,correct
-        </code>
-        <p className="mt-2 text-xs text-gray-400">
-          correct: 正解の選択肢番号（1〜5）
-        </p>
+        <button
+          onClick={downloadTemplate}
+          className="mt-3 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+        >
+          <FileDown className="h-4 w-4" />
+          CSVテンプレートをダウンロード
+        </button>
+
+        <div className="mt-4 border-t pt-4">
+          <h3 className="text-sm font-medium text-gray-700">CSV列の説明</h3>
+          <code className="mt-2 block overflow-x-auto rounded bg-gray-100 p-3 text-xs">
+            topic,session,text,difficulty,briefExplanation,detailedExplanation,year,choice1,choice2,choice3,choice4,choice5,correct
+          </code>
+          <ul className="mt-2 space-y-0.5 text-xs text-gray-500">
+            <li><strong>topic</strong>: 分野名（未登録の場合は自動作成）</li>
+            <li><strong>session</strong>: 学習単位名（省略可、未登録の場合は自動作成）</li>
+            <li><strong>difficulty</strong>: 1=易, 2=標準, 3=難</li>
+            <li><strong>choice1〜5</strong>: 選択肢（最低2つ必須、5まで使用可）</li>
+            <li><strong>correct</strong>: 正解の選択肢番号（1〜5）</li>
+          </ul>
+        </div>
       </div>
     </div>
   );

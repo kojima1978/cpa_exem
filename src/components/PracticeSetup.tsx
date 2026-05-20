@@ -36,7 +36,7 @@ export function PracticeSetup({ onStart, initialMode }: Props) {
     params.set("mode", mode);
     params.set("limit", limit);
     if (topicId) params.set("topicId", topicId);
-    if (mode === "session" && sessionId) params.set("sessionId", sessionId);
+    if (sessionId) params.set("sessionId", sessionId);
     if (difficulty) params.set("difficulty", difficulty);
     onStart(params);
   };
