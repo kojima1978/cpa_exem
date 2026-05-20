@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Subject {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  displayOrder Int       @default(0)
+  topics       Topic[]
+  sessions     Session[]
+}
+
+model Topic {
+  id           Int        @id @default(autoincrement())
+  subjectId    Int
+  name         String
+  displayOrder Int        @default(0)
+  subject      Subject    @relation(fields: [subjectId], references: [id])
+  questions    Question[]
+
+  @@unique([subjectId, name])
+}
+
+model Session {
+  id           Int        @id @default(autoincrement())
+  subjectId    Int
+  name         String
+  description  String     @default("")
+  displayOrder Int        @default(0)
+  subject      Subject    @relation(fields: [subjectId], references: [id])
+  questions    Question[]
+
+  @@unique([subjectId, name])
+}
+
+model Question {
+  id                  Int             @id @default(autoincrement())
+  topicId             Int
+  sessionId           Int?
+  text                String
+  difficulty          Int             @default(1)
+  briefExplanation    String          @default("")
+  detailedExplanation String          @default("")
+  year                Int?
+  createdAt           DateTime        @default(now())
+  topic               Topic           @relation(fields: [topicId], references: [id])
+  session             Session?        @relation(fields: [sessionId], references: [id])
+  choices             Choice[]
+  answerHistories     AnswerHistory[]
+  bookmarks           Bookmark[]
+}
+
+model Choice {
+  id           Int     @id @default(autoincrement())
+  questionId   Int
+  text         String
+  isCorrect    Boolean @default(false)
+  displayOrder Int     @default(0)
+  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model AnswerHistory {
+  id             Int      @id @default(autoincrement())
+  questionId     Int
+  chosenChoiceId Int
+  isCorrect      Boolean
+  timeSpent      Int?
+  answeredAt     DateTime @default(now())
+  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model Bookmark {
+  id         Int      @id @default(autoincrement())
+  questionId Int
+  createdAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId])
+}
+
+model StudyStreak {
+  id            Int      @id @default(autoincrement())
+  date          String   @unique
+  questionCount Int      @default(0)
+  correctCount  Int      @default(0)
+}

@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3020:3000"
+    volumes:
+      - ./src:/app/src:ro
+      - ./prisma:/app/prisma
+      - ./public:/app/public:ro
+      - db-data:/app/prisma/data
+    environment:
+      - DATABASE_URL=file:/app/prisma/data/cpa-exam.db
+volumes:
+  db-data:
