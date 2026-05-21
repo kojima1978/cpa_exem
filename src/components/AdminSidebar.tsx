@@ -7,6 +7,7 @@ import {
   Upload,
   FolderTree,
   BookMarked,
+  Settings,
 } from "lucide-react";
 
 const ADMIN_LINKS = [
@@ -15,6 +16,7 @@ const ADMIN_LINKS = [
   { href: "/admin/import", label: "インポート", icon: Upload },
   { href: "/admin/topics", label: "分野管理", icon: FolderTree },
   { href: "/admin/sessions", label: "学習単位管理", icon: BookMarked },
+  { href: "/admin/settings", label: "設定", icon: Settings },
 ];
 
 export function AdminSidebar() {

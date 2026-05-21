@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, Upload, FolderTree, BookMarked } from "lucide-react";
+import { FileText, Upload, FolderTree, BookMarked, Settings } from "lucide-react";
 
 const CARDS = [
   {
@@ -25,6 +25,12 @@ const CARDS = [
     label: "学習単位管理",
     desc: "基準・単元の追加・編集",
     icon: BookMarked,
+  },
+  {
+    href: "/admin/settings",
+    label: "設定",
+    desc: "バックアップ・復元",
+    icon: Settings,
   },
 ];
 
