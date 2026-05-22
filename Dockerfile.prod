@@ -4,6 +4,8 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
+COPY prisma ./prisma
+RUN npx prisma generate
 
 FROM base AS builder
 WORKDIR /app
@@ -24,7 +26,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY docker-entrypoint.prod.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.prod.sh

@@ -3,7 +3,7 @@ set -e
 
 mkdir -p /app/prisma/data
 
-npx prisma db push --skip-generate
-npx prisma db seed
+./node_modules/.bin/prisma db push --skip-generate
+./node_modules/.bin/tsx prisma/seed.ts
 
 exec "$@"

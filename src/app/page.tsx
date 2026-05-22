@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 async function getHomeData() {
   const today = new Date().toISOString().slice(0, 10);
 

@@ -1,0 +1,16 @@
+.git
+.next
+node_modules
+out
+dist
+*.tsbuildinfo
+
+.env
+.env*.local
+prisma/data
+*.db
+tmp_*.txt
+tmp_*.json
+
+.DS_Store
+Thumbs.db
