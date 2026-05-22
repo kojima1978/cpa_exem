@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
           difficulty: item.difficulty ?? 1,
           briefExplanation: item.briefExplanation ?? "",
           detailedExplanation: item.detailedExplanation ?? "",
+          sourceReference: item.sourceReference ?? "",
           year: item.year ?? null,
           choices: {
             create: item.choices.map((c, j) => ({
@@ -132,6 +133,7 @@ function parseCSV(text: string): ImportQuestion[] {
         difficulty: Number(row.difficulty) || 1,
         briefExplanation: row.briefExplanation || "",
         detailedExplanation: row.detailedExplanation || "",
+        sourceReference: row.sourceReference || "",
         year: Number(row.year) || undefined,
         choices,
       });

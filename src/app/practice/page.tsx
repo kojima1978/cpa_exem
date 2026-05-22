@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { PracticeSetup } from "@/components/PracticeSetup";
 import { QuestionView } from "@/components/QuestionView";
@@ -12,6 +12,7 @@ export type PracticeQuestion = {
   difficulty: number;
   briefExplanation: string;
   detailedExplanation: string;
+  sourceReference: string;
   topic: { id: number; name: string };
   session: { id: number; name: string } | null;
   choices: { id: number; text: string; isCorrect: boolean; displayOrder: number }[];
@@ -29,6 +30,14 @@ export type AnswerRecord = {
 type Phase = "setup" | "practice" | "results";
 
 export default function PracticePage() {
+  return (
+    <Suspense>
+      <PracticePageContent />
+    </Suspense>
+  );
+}
+
+function PracticePageContent() {
   const searchParams = useSearchParams();
   const initialMode = searchParams.get("mode") || "all";
 
@@ -126,6 +135,15 @@ export default function PracticePage() {
     }
   }, [bookmarkedIds]);
 
+  const handleQuestionUpdate = useCallback(
+    (updated: PracticeQuestion) => {
+      setQuestions((prev) =>
+        prev.map((q) => (q.id === updated.id ? updated : q)),
+      );
+    },
+    [],
+  );
+
   const handleRetry = useCallback(() => {
     setPhase("setup");
     setQuestions([]);
@@ -154,6 +172,7 @@ export default function PracticePage() {
         onNext={handleNext}
         onFinish={handleFinish}
         onToggleBookmark={() => handleToggleBookmark(currentQuestion.id)}
+        onQuestionUpdate={handleQuestionUpdate}
       />
     );
   }

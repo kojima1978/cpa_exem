@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
           difficulty: q.difficulty,
           briefExplanation: ans.explanation,
           detailedExplanation: ans.additional || "",
+          sourceReference: ans.sourceReference || "",
           year: q.year ?? null,
           choices: {
             create: [
@@ -95,6 +96,7 @@ type ParsedAnswer = {
   isCorrect: boolean;
   explanation: string;
   additional: string;
+  sourceReference: string;
 };
 
 /** Normalize OCR garbage before the 問題 keyword */
@@ -124,10 +126,13 @@ function parseMaruBatsuText(raw: string) {
   let mode: "question" | "answer" = "question";
   let buffer: string[] = [];
   let currentQ: Partial<ParsedQuestion> | null = null;
-  let currentA: { num: number; isCorrect: boolean; lines: string[] } | null =
+  let currentA: { num: number; isCorrect: boolean; lines: string[]; sourceReference: string } | null =
     null;
   let additionalLines: string[] = [];
   let collectingAdditional = false;
+  let judgmentAnswerNum: number | null = null;
+  let comboProblemNum: number | null = null;
+  let isJudgmentQuestion = false;
 
   const QUESTION_META_RE = /^ロロロ\s*問題\s*(\d+)\s+重要度\s*([ABC])/;
   const ANSWER_RE = /^ロロロ\s*問題\s*(\d+)\s+(正しい|誤り)/;
@@ -135,6 +140,11 @@ function parseMaruBatsuText(raw: string) {
   const ADDITIONAL_RE = /^追加でチェック/;
   const PAGE_MARKER_RE = /^[①②③④⑤⑥⑦⑧⑨⑩]\s*[-ー]\s*\d+$/;
   const CHAPTER_HEADER_RE = /^[第\d]+章/;
+  const JUDGMENT_ANSWER_RE = /^ロロロ\s*問題\s*(\d+)\s*$/;
+  const ITEM_LABEL_RE = /^([アイウエオカキクケコ])[.．]\s*(.+)/;
+  const KATAKANA_LABELS = ['ア', 'イ', 'ウ', 'エ', 'オ', 'カ', 'キ', 'ク', 'ケ', 'コ'];
+  const COMBO_ANSWER_RE = /^ロロロ\s*問題\s*(\d+)\s+正解\s*(\d+)/;
+  const COMBO_ITEM_RE = /^([アイウエオカキクケコ])[.．]?\s*([×○])\s*(.*)/;
 
   function flushQuestion() {
     if (currentQ && currentQ.num != null && buffer.length > 0) {
@@ -167,6 +177,7 @@ function parseMaruBatsuText(raw: string) {
           isCorrect: currentA.isCorrect,
           explanation,
           additional,
+          sourceReference: currentA.sourceReference || "",
         });
       }
     }
@@ -196,10 +207,13 @@ function parseMaruBatsuText(raw: string) {
     if (questionMatch) {
       if (mode === "answer") {
         flushAnswer();
+        judgmentAnswerNum = null;
+        comboProblemNum = null;
         mode = "question";
       } else {
         flushQuestion();
       }
+      isJudgmentQuestion = false;
       const diffMap: Record<string, number> = { A: 3, B: 2, C: 1 };
       currentQ = {
         num: Number(questionMatch[1]),
@@ -219,17 +233,45 @@ function parseMaruBatsuText(raw: string) {
       } else {
         flushAnswer();
       }
+      judgmentAnswerNum = null;
+      comboProblemNum = null;
+      // Remaining text after 正しい/誤り on same line = source reference (根拠条文)
+      const afterAnswer = line.slice(answerMatch[0].length).trim();
       currentA = {
         num: Number(answerMatch[1]),
         isCorrect: answerMatch[2] === "正しい",
         lines: [],
+        sourceReference: afterAnswer || "",
       };
-      // Remaining text after 正しい/誤り on same line
-      const afterAnswer = line.slice(answerMatch[0].length).trim();
-      if (afterAnswer && !afterAnswer.match(/^[HR]\d+/) && afterAnswer !== "」") {
-        currentA.lines.push(afterAnswer);
-      }
       collectingAdditional = false;
+      continue;
+    }
+
+    // Check for judgment answer header (問題N without 正しい/誤り)
+    const judgmentAnswerMatch = line.match(JUDGMENT_ANSWER_RE);
+    if (judgmentAnswerMatch) {
+      if (mode === "question") {
+        flushQuestion();
+        mode = "answer";
+      } else {
+        flushAnswer();
+      }
+      judgmentAnswerNum = Number(judgmentAnswerMatch[1]);
+      comboProblemNum = null;
+      continue;
+    }
+
+    // Check for combination answer header (問題N 正解N)
+    const comboAnswerMatch = line.match(COMBO_ANSWER_RE);
+    if (comboAnswerMatch) {
+      if (mode === "question") {
+        flushQuestion();
+        mode = "answer";
+      } else {
+        flushAnswer();
+      }
+      comboProblemNum = Number(comboAnswerMatch[1]);
+      judgmentAnswerNum = null;
       continue;
     }
 
@@ -241,11 +283,58 @@ function parseMaruBatsuText(raw: string) {
           isCorrect: currentA.isCorrect,
           explanation: existingExplanation,
           additional: "",
+          sourceReference: currentA.sourceReference || "",
         });
         collectingAdditional = true;
         additionalLines = [];
       }
       continue;
+    }
+
+    // In answer mode — check for judgment sub-item (ア～ケ)
+    if (mode === "answer" && judgmentAnswerNum != null) {
+      const itemMatch = line.match(ITEM_LABEL_RE);
+      if (itemMatch) {
+        flushAnswer();
+        const label = itemMatch[1];
+        const itemText = itemMatch[2].trim();
+        const cNum = judgmentAnswerNum * 100 + (KATAKANA_LABELS.indexOf(label) + 1);
+        const hasNegation = itemText.includes("該当しない") || itemText.includes("対象外");
+        const isCorrect = !hasNegation && (itemText.includes("該当") || itemText.includes("対象"));
+        let sourceReference = "";
+        const srcMatch = itemText.match(/(?:該当(?:する|しない)[。．.]?|対象外?取引)\s*(.*)/);
+        if (srcMatch && srcMatch[1]) {
+          sourceReference = srcMatch[1].trim();
+        }
+        currentA = {
+          num: cNum,
+          isCorrect,
+          lines: [],
+          sourceReference,
+        };
+        collectingAdditional = false;
+        continue;
+      }
+    }
+
+    // In answer mode — check for combo sub-item (ア × / ウ．○)
+    if (mode === "answer" && comboProblemNum != null) {
+      const comboMatch = line.match(COMBO_ITEM_RE);
+      if (comboMatch) {
+        flushAnswer();
+        const label = comboMatch[1];
+        const marubatsu = comboMatch[2];
+        const explanationText = comboMatch[3].trim();
+        const cNum = comboProblemNum * 100 + (KATAKANA_LABELS.indexOf(label) + 1);
+        currentA = {
+          num: cNum,
+          isCorrect: marubatsu === "○",
+          lines: explanationText ? [explanationText] : [],
+          sourceReference: "",
+        };
+        collectingAdditional = false;
+        continue;
+      }
     }
 
     // In answer mode
@@ -258,16 +347,36 @@ function parseMaruBatsuText(raw: string) {
       continue;
     }
 
+    // In question mode — check for judgment question sub-item (ア～ケ)
+    if (mode === "question" && currentQ) {
+      const itemMatch = line.match(ITEM_LABEL_RE);
+      if (itemMatch) {
+        isJudgmentQuestion = true;
+        buffer = []; // discard intro text (use item text only)
+        const label = itemMatch[1];
+        const itemText = itemMatch[2].trim();
+        const cNum = currentQ.num! * 100 + (KATAKANA_LABELS.indexOf(label) + 1);
+        questions.push({
+          num: cNum,
+          session: currentQ.session || currentSession,
+          text: itemText,
+          difficulty: currentQ.difficulty || 2,
+          year: currentQ.year ?? null,
+        });
+        continue;
+      }
+    }
+
     // In question mode — check for section header
     const sectionMatch = line.match(SECTION_RE);
-    if (sectionMatch && !line.includes("問題") && !line.includes("重要度")) {
+    if (sectionMatch && !line.includes("問題") && !line.includes("重要度") && !isJudgmentQuestion) {
       flushQuestion();
       currentSession = sectionMatch[2].trim();
       continue;
     }
 
-    // Regular text line — append to question buffer
-    if (currentQ) {
+    // Regular text line — append to question buffer (skip in judgment/combo questions)
+    if (currentQ && !isJudgmentQuestion) {
       buffer.push(line);
     }
   }

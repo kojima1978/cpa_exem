@@ -7,6 +7,9 @@ next-env.d.ts
 
 .env*.local
 prisma/data/
+*.db
+tmp_*.txt
+tmp_*.json
 
 .DS_Store
 Thumbs.db

@@ -42,7 +42,7 @@ export default function ImportPage() {
 
   const downloadTemplate = () => {
     const header =
-      "topic,session,text,difficulty,briefExplanation,detailedExplanation,year,choice1,choice2,choice3,choice4,choice5,correct";
+      "topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,year,choice1,choice2,choice3,choice4,choice5,correct";
     const sample = [
       '"簿記"',
       '"企業会計原則"',
@@ -50,6 +50,7 @@ export default function ImportPage() {
       "2",
       '"正解は後入先出法。企業会計基準第9号により廃止された。"',
       '"企業会計基準第9号「棚卸資産の評価に関する会計基準」により、後入先出法は2010年4月以降適用の事業年度から廃止された。"',
+      '""',
       "2024",
       '"先入先出法"',
       '"移動平均法"',
@@ -79,7 +80,12 @@ export default function ImportPage() {
       headers: { "Content-Type": isCSV ? "text/csv" : "application/json" },
       body,
     });
-    setResult(await res.json());
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setResult({ imported: 0, errors: [data.error || "インポートに失敗しました"], total: 0 });
+    } else {
+      setResult(data);
+    }
     setImporting(false);
   };
 
@@ -92,7 +98,12 @@ export default function ImportPage() {
       headers: { "Content-Type": "application/json" },
       body: jsonText,
     });
-    setResult(await res.json());
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setResult({ imported: 0, errors: [data.error || "インポートに失敗しました"], total: 0 });
+    } else {
+      setResult(data);
+    }
     setImporting(false);
   };
 
@@ -105,7 +116,12 @@ export default function ImportPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: mbText, topicId: Number(mbTopicId) }),
     });
-    setResult(await res.json());
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setResult({ imported: 0, errors: [data.error || "インポートに失敗しました"], total: 0 });
+    } else {
+      setResult(data);
+    }
     setImporting(false);
   };
 
@@ -291,12 +307,13 @@ export default function ImportPage() {
         <div className="mt-4 border-t pt-4">
           <h3 className="text-sm font-medium text-gray-700">CSV列の説明</h3>
           <code className="mt-2 block overflow-x-auto rounded bg-gray-100 p-3 text-xs">
-            topic,session,text,difficulty,briefExplanation,detailedExplanation,year,choice1,choice2,choice3,choice4,choice5,correct
+            topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,year,choice1,choice2,choice3,choice4,choice5,correct
           </code>
           <ul className="mt-2 space-y-0.5 text-xs text-gray-500">
             <li><strong>topic</strong>: 分野名（未登録の場合は自動作成）</li>
             <li><strong>session</strong>: 学習単位名（省略可、未登録の場合は自動作成）</li>
             <li><strong>difficulty</strong>: 1=易, 2=標準, 3=難</li>
+            <li><strong>sourceReference</strong>: 根拠条文（省略可）</li>
             <li><strong>choice1〜5</strong>: 選択肢（最低2つ必須、5まで使用可）</li>
             <li><strong>correct</strong>: 正解の選択肢番号（1〜5）</li>
           </ul>

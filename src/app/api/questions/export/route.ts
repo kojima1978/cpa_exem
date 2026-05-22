@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   if (format === "csv") {
     const header =
-      "topic,session,text,difficulty,briefExplanation,detailedExplanation,year,choice1,choice2,choice3,choice4,choice5,correct";
+      "topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,year,choice1,choice2,choice3,choice4,choice5,correct";
     const rows = questions.map((q) => {
       const correctIdx =
         q.choices.findIndex((c) => c.isCorrect) + 1;
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
         q.difficulty,
         csvEscape(q.briefExplanation),
         csvEscape(q.detailedExplanation),
+        csvEscape(q.sourceReference),
         q.year || "",
         ...choiceTexts,
         correctIdx,
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     difficulty: q.difficulty,
     briefExplanation: q.briefExplanation,
     detailedExplanation: q.detailedExplanation,
+    sourceReference: q.sourceReference,
     year: q.year,
     choices: q.choices.map((c) => ({
       text: c.text,

@@ -6,6 +6,7 @@ export type QuestionWithRelations = {
   difficulty: number;
   briefExplanation: string;
   detailedExplanation: string;
+  sourceReference: string;
   year: number | null;
   createdAt: string;
   topic: { id: number; name: string };
@@ -50,6 +51,7 @@ export type ImportQuestion = {
   difficulty?: number;
   briefExplanation?: string;
   detailedExplanation?: string;
+  sourceReference?: string;
   year?: number;
   choices: { text: string; isCorrect: boolean }[];
 };

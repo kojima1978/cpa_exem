@@ -46,6 +46,7 @@ model Question {
   difficulty          Int             @default(1)
   briefExplanation    String          @default("")
   detailedExplanation String          @default("")
+  sourceReference     String          @default("")
   year                Int?
   createdAt           DateTime        @default(now())
   topic               Topic           @relation(fields: [topicId], references: [id])

@@ -15,6 +15,7 @@ type QuestionFormProps = {
     difficulty: number;
     briefExplanation: string;
     detailedExplanation: string;
+    sourceReference: string;
     year: number | null;
     choices: ChoiceInput[];
   };
@@ -38,6 +39,9 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
   );
   const [detailedExplanation, setDetailedExplanation] = useState(
     initialData?.detailedExplanation ?? ""
+  );
+  const [sourceReference, setSourceReference] = useState(
+    initialData?.sourceReference ?? ""
   );
   const [year, setYear] = useState(initialData?.year ?? null);
   const [choices, setChoices] = useState<ChoiceInput[]>(
@@ -88,6 +92,7 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
       difficulty,
       briefExplanation,
       detailedExplanation,
+      sourceReference,
       year: year || null,
       choices,
     };
@@ -248,7 +253,18 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
           value={detailedExplanation}
           onChange={(e) => setDetailedExplanation(e.target.value)}
           className={inputClass}
-          placeholder="根拠条文・計算過程など..."
+          placeholder="追加でチェック！の内容など..."
+        />
+      </div>
+
+      <div>
+        <label className={labelClass}>根拠条文</label>
+        <input
+          type="text"
+          value={sourceReference}
+          onChange={(e) => setSourceReference(e.target.value)}
+          className={inputClass}
+          placeholder="例: 「企業会計原則」第一 一"
         />
       </div>
 
