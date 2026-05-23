@@ -1,0 +1,7 @@
+services:
+  app:
+    build: .
+    volumes:
+      - ./src:/app/src:ro
+      - ./prisma:/app/prisma
+      - ./public:/app/public:ro
