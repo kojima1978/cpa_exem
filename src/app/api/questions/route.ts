@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, Number(sp.get("page") || 1));
   const limit = Math.min(100, Math.max(1, Number(sp.get("limit") || 20)));
 
+  const subjectId = sp.get("subjectId");
+
   const where: Record<string, unknown> = {};
+  if (subjectId) where.topic = { subjectId: Number(subjectId) };
   if (topicId) where.topicId = Number(topicId);
   if (sessionId) where.sessionId = Number(sessionId);
   if (difficulty) where.difficulty = Number(difficulty);

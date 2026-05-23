@@ -1,5 +1,7 @@
 services:
   app:
+    build: .
+    image: cpa-exam-app
     ports:
       - "3020:3000"
     volumes:

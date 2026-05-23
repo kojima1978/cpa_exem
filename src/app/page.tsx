@@ -8,13 +8,17 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { calculateStreak } from "@/lib/streak";
 
 export const dynamic = "force-dynamic";
 
 async function getHomeData() {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [subjects, todayStreak, allStreaks, totalQuestions, totalAnswered, totalCorrect] =
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  const [subjects, todayStreak, allStreaks, totalQuestions, totalAnswered, totalCorrect, reviewCount] =
     await Promise.all([
       prisma.subject.findMany({
         orderBy: { displayOrder: "asc" },
@@ -25,13 +29,22 @@ async function getHomeData() {
       prisma.question.count(),
       prisma.answerHistory.count(),
       prisma.answerHistory.count({ where: { isCorrect: true } }),
+      prisma.question.count({
+        where: { OR: [{ nextReviewAt: null }, { nextReviewAt: { lte: todayDate } }] },
+      }),
     ]);
 
-  const reviewCount = await getReviewCount();
+  const answeredByTopic = await prisma.question.groupBy({
+    by: ["topicId"],
+    where: { answerHistories: { some: {} } },
+    _count: true,
+  });
+  const answeredMap = new Map(answeredByTopic.map((g) => [g.topicId, g._count]));
 
   const subjectCounts = subjects.map((s) => ({
     name: s.name,
     count: s.topics.reduce((sum, t) => sum + t._count.questions, 0),
+    answered: s.topics.reduce((sum, t) => sum + (answeredMap.get(t.id) || 0), 0),
     active: s.topics.some((t) => t._count.questions > 0),
   }));
 
@@ -50,66 +63,6 @@ async function getHomeData() {
       totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0,
     reviewCount,
   };
-}
-
-async function getReviewCount(): Promise<number> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const questions = await prisma.question.findMany({
-    include: {
-      answerHistories: {
-        orderBy: { answeredAt: "desc" },
-        select: { isCorrect: true, answeredAt: true },
-      },
-    },
-  });
-
-  let count = 0;
-  for (const q of questions) {
-    if (q.answerHistories.length === 0) {
-      count++;
-      continue;
-    }
-    const answers = q.answerHistories.map((h) => h.isCorrect);
-    let ef = 2.5;
-    let interval = 1;
-    let cc = 0;
-    for (const ok of [...answers].reverse()) {
-      if (ok) {
-        cc++;
-        interval = cc === 1 ? 1 : cc === 2 ? 6 : Math.round(interval * ef);
-        ef = Math.max(1.3, ef + 0.1);
-      } else {
-        cc = 0;
-        interval = 1;
-        ef = Math.max(1.3, ef - 0.2);
-      }
-    }
-    const last = new Date(q.answerHistories[0].answeredAt);
-    const next = new Date(last.getTime() + interval * 86400000);
-    if (next <= today) count++;
-  }
-  return count;
-}
-
-function calculateStreak(dates: string[]): number {
-  if (dates.length === 0) return 0;
-  const sorted = [...dates].sort((a, b) => b.localeCompare(a));
-  const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  if (sorted[0] !== today && sorted[0] !== yesterday) return 0;
-  let streak = 1;
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = new Date(sorted[i - 1]);
-    const curr = new Date(sorted[i]);
-    if (Math.round((prev.getTime() - curr.getTime()) / 86400000) === 1) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-  return streak;
 }
 
 export default async function HomePage() {
@@ -214,21 +167,42 @@ export default async function HomePage() {
           科目
         </h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {data.subjectCounts.map((subject) => (
-            <div
-              key={subject.name}
-              className={`rounded-lg border p-4 ${
-                subject.active
-                  ? "border-primary-200 bg-primary-50"
-                  : "border-gray-200 bg-gray-50 opacity-60"
-              }`}
-            >
-              <div className="font-medium">{subject.name}</div>
-              <div className="mt-1 text-sm text-gray-500">
-                問題数: {subject.count}
+          {data.subjectCounts.map((subject) => {
+            const progress = subject.count > 0
+              ? Math.round((subject.answered / subject.count) * 100)
+              : 0;
+            return subject.active ? (
+              <Link
+                key={subject.name}
+                href="/practice"
+                className="block rounded-lg border border-primary-200 bg-primary-50 p-4 transition-shadow hover:shadow-md"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{subject.name}</span>
+                  <PlayCircle className="h-4 w-4 text-primary-400" />
+                </div>
+                <div className="mt-1 text-sm text-gray-500">
+                  {subject.answered}/{subject.count}問 回答済み
+                </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-primary-100">
+                  <div
+                    className="h-1.5 rounded-full bg-primary-400 transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </Link>
+            ) : (
+              <div
+                key={subject.name}
+                className="rounded-lg border border-gray-200 bg-gray-50 p-4 opacity-60"
+              >
+                <div className="font-medium">{subject.name}</div>
+                <div className="mt-1 text-sm text-gray-500">
+                  問題数: {subject.count}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>

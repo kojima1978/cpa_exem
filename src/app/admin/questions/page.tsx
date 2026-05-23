@@ -3,23 +3,28 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
-import type { QuestionWithRelations, TopicData, SessionData } from "@/types";
+import type { QuestionWithRelations, TopicData, SessionData, SubjectData } from "@/types";
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<QuestionWithRelations[]>([]);
+  const [subjects, setSubjects] = useState<SubjectData[]>([]);
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [subjectId, setSubjectId] = useState("");
   const [topicId, setTopicId] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [difficulty, setDifficulty] = useState("");
   const [search, setSearch] = useState("");
 
   const fetchQuestions = useCallback(async () => {
     const params = new URLSearchParams({ page: String(page), limit: "20" });
+    if (subjectId) params.set("subjectId", subjectId);
     if (topicId) params.set("topicId", topicId);
     if (sessionId) params.set("sessionId", sessionId);
+    if (difficulty) params.set("difficulty", difficulty);
     if (search) params.set("search", search);
 
     const res = await fetch(`/api/questions?${params}`);
@@ -27,13 +32,14 @@ export default function QuestionsPage() {
     setQuestions(data.questions);
     setTotal(data.pagination.total);
     setTotalPages(data.pagination.totalPages);
-  }, [page, topicId, sessionId, search]);
+  }, [page, subjectId, topicId, sessionId, difficulty, search]);
 
   useEffect(() => {
     fetchQuestions();
   }, [fetchQuestions]);
 
   useEffect(() => {
+    fetch("/api/subjects").then((r) => r.json()).then(setSubjects);
     fetch("/api/topics").then((r) => r.json()).then(setTopics);
     fetch("/api/sessions").then((r) => r.json()).then(setSessions);
   }, []);
@@ -45,7 +51,22 @@ export default function QuestionsPage() {
   };
 
   const difficultyLabel = (d: number) =>
-    ["", "易", "標準", "難"][d] || "";
+    ["", "出題高", "普通", "出題低"][d] || "";
+
+  // 科目でフィルターしたトピック・学習単位
+  const filteredTopics = subjectId
+    ? topics.filter((t) => t.subjectId === Number(subjectId))
+    : topics;
+  const filteredSessions = subjectId
+    ? sessions.filter((s) => s.subjectId === Number(subjectId))
+    : sessions;
+
+  const handleSubjectChange = (val: string) => {
+    setSubjectId(val);
+    setTopicId("");
+    setSessionId("");
+    setPage(1);
+  };
 
   return (
     <div>
@@ -72,14 +93,38 @@ export default function QuestionsPage() {
           />
         </div>
         <select
+          value={subjectId}
+          onChange={(e) => handleSubjectChange(e.target.value)}
+          className="rounded-lg border px-3 py-2 text-sm"
+        >
+          <option value="">全科目</option>
+          {subjects.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        <select
           value={topicId}
           onChange={(e) => { setTopicId(e.target.value); setPage(1); }}
           className="rounded-lg border px-3 py-2 text-sm"
         >
           <option value="">全分野</option>
-          {topics.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
+          {subjectId ? (
+            filteredTopics.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))
+          ) : (
+            subjects.map((s) => {
+              const subjectTopics = topics.filter((t) => t.subjectId === s.id);
+              if (subjectTopics.length === 0) return null;
+              return (
+                <optgroup key={s.id} label={s.name}>
+                  {subjectTopics.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </optgroup>
+              );
+            })
+          )}
         </select>
         <select
           value={sessionId}
@@ -87,9 +132,19 @@ export default function QuestionsPage() {
           className="rounded-lg border px-3 py-2 text-sm"
         >
           <option value="">全学習単位</option>
-          {sessions.map((s) => (
+          {filteredSessions.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
+        </select>
+        <select
+          value={difficulty}
+          onChange={(e) => { setDifficulty(e.target.value); setPage(1); }}
+          className="rounded-lg border px-3 py-2 text-sm"
+        >
+          <option value="">全出題頻度</option>
+          <option value="1">出題高</option>
+          <option value="2">普通</option>
+          <option value="3">出題低</option>
         </select>
       </div>
 
@@ -112,7 +167,7 @@ export default function QuestionsPage() {
                     {q.session.name}
                   </span>
                 )}
-                <span>難易度: {difficultyLabel(q.difficulty)}</span>
+                <span>出題頻度: {difficultyLabel(q.difficulty)}</span>
                 {q.year && <span>{q.year}年</span>}
               </div>
             </div>

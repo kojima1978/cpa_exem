@@ -48,6 +48,7 @@ model Question {
   detailedExplanation String          @default("")
   sourceReference     String          @default("")
   year                Int?
+  nextReviewAt        DateTime?
   createdAt           DateTime        @default(now())
   topic               Topic           @relation(fields: [topicId], references: [id])
   session             Session?        @relation(fields: [sessionId], references: [id])

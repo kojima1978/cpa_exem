@@ -25,6 +25,8 @@ export type AnswerRecord = {
   chosenChoiceId: number;
   isCorrect: boolean;
   timeSpent: number;
+  skipped?: boolean;
+  unsure?: boolean;
 };
 
 type Phase = "setup" | "practice" | "results";
@@ -103,6 +105,46 @@ function PracticePageContent() {
     [questions, currentIndex]
   );
 
+  const handleSkip = useCallback(async () => {
+    const q = questions[currentIndex];
+    const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
+
+    await fetch("/api/answers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        questionId: q.id,
+        skipped: true,
+        timeSpent,
+      }),
+    });
+
+    setAnswers((prev) => [
+      ...prev,
+      {
+        questionId: q.id,
+        chosenChoiceId: 0,
+        isCorrect: false,
+        timeSpent,
+        skipped: true,
+      },
+    ]);
+  }, [questions, currentIndex]);
+
+  const handleUnsure = useCallback(async (questionId: number) => {
+    await fetch("/api/answers/unsure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ questionId }),
+    });
+
+    setAnswers((prev) =>
+      prev.map((a) =>
+        a.questionId === questionId ? { ...a, unsure: true } : a,
+      ),
+    );
+  }, []);
+
   const handleNext = useCallback(() => {
     if (currentIndex + 1 >= questions.length) {
       setPhase("results");
@@ -151,6 +193,21 @@ function PracticePageContent() {
     setCurrentIndex(0);
   }, []);
 
+  const handleRetryWrong = useCallback(() => {
+    const retryIds = new Set(
+      answers
+        .filter((a) => !a.isCorrect || a.unsure)
+        .map((a) => a.questionId),
+    );
+    const wrongQuestions = questions.filter((q) => retryIds.has(q.id));
+    if (wrongQuestions.length === 0) return;
+    setQuestions(wrongQuestions);
+    setCurrentIndex(0);
+    setAnswers([]);
+    startTimeRef.current = Date.now();
+    setPhase("practice");
+  }, [answers, questions]);
+
   if (phase === "setup") {
     return <PracticeSetup onStart={handleStart} initialMode={initialMode} />;
   }
@@ -169,6 +226,8 @@ function PracticePageContent() {
         answer={currentAnswer}
         isBookmarked={bookmarkedIds.has(currentQuestion.id)}
         onAnswer={handleAnswer}
+        onSkip={handleSkip}
+        onUnsure={() => handleUnsure(currentQuestion.id)}
         onNext={handleNext}
         onFinish={handleFinish}
         onToggleBookmark={() => handleToggleBookmark(currentQuestion.id)}
@@ -182,6 +241,7 @@ function PracticePageContent() {
       questions={questions}
       answers={answers}
       onRetry={handleRetry}
+      onRetryWrong={handleRetryWrong}
     />
   );
 }

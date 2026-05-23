@@ -3,10 +3,13 @@
 import { useState } from "react";
 import {
   RotateCcw,
+  RefreshCw,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
   XCircle,
+  HelpCircle,
+  AlertTriangle,
   BarChart3,
   Home,
 } from "lucide-react";
@@ -17,9 +20,10 @@ type Props = {
   questions: PracticeQuestion[];
   answers: AnswerRecord[];
   onRetry: () => void;
+  onRetryWrong: () => void;
 };
 
-export function PracticeResults({ questions, answers, onRetry }: Props) {
+export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const totalAnswered = answers.length;
@@ -41,7 +45,10 @@ export function PracticeResults({ questions, answers, onRetry }: Props) {
     topicStats.set(name, stat);
   }
 
-  const wrongAnswers = answers.filter((a) => !a.isCorrect);
+  const wrongAnswers = answers.filter((a) => !a.isCorrect && !a.skipped);
+  const skippedAnswers = answers.filter((a) => a.skipped);
+  const unsureAnswers = answers.filter((a) => a.unsure);
+  const retryCount = wrongAnswers.length + skippedAnswers.length + unsureAnswers.length;
 
   return (
     <div className="space-y-6">
@@ -53,8 +60,14 @@ export function PracticeResults({ questions, answers, onRetry }: Props) {
         <p className="mt-1 text-gray-500">
           {correctCount} / {totalAnswered} 問正解
         </p>
-        <div className="mt-3 flex justify-center gap-6 text-sm text-gray-500">
+        <div className="mt-3 flex flex-wrap justify-center gap-4 text-sm text-gray-500">
           <span>平均回答時間: {avgTime}秒</span>
+          {skippedAnswers.length > 0 && (
+            <span className="text-amber-600">わからない: {skippedAnswers.length}問</span>
+          )}
+          {unsureAnswers.length > 0 && (
+            <span className="text-amber-600">自信なし: {unsureAnswers.length}問</span>
+          )}
         </div>
       </div>
 
@@ -158,6 +171,81 @@ export function PracticeResults({ questions, answers, onRetry }: Props) {
         </div>
       )}
 
+      {/* Skipped answers */}
+      {skippedAnswers.length > 0 && (
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-amber-600">
+            <HelpCircle className="h-5 w-5" />
+            わからなかった問題 ({skippedAnswers.length}問)
+          </h2>
+          <div className="mt-3 space-y-2">
+            {skippedAnswers.map((answer) => {
+              const q = questions.find((q) => q.id === answer.questionId);
+              if (!q) return null;
+              const isExpanded = expandedId === q.id;
+              const correctChoice = q.choices.find((c) => c.isCorrect);
+
+              return (
+                <div key={q.id} className="rounded-lg border">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : q.id)}
+                    className="flex w-full items-start gap-2 px-4 py-3 text-left hover:bg-gray-50"
+                  >
+                    <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                    <span className="flex-1 text-sm line-clamp-2">
+                      {q.text}
+                    </span>
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+                    )}
+                  </button>
+                  {isExpanded && (
+                    <div className="border-t px-4 py-3 space-y-2">
+                      <div className="flex items-start gap-2 text-sm">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                        <div>
+                          <span className="text-xs text-gray-400">正解:</span>
+                          <p className="text-green-700">{correctChoice?.text}</p>
+                        </div>
+                      </div>
+                      {q.briefExplanation && (
+                        <p className="rounded bg-gray-50 p-2 text-sm text-gray-600">
+                          {q.briefExplanation}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Unsure answers */}
+      {unsureAnswers.length > 0 && (
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-amber-600">
+            <AlertTriangle className="h-5 w-5" />
+            自信なし ({unsureAnswers.length}問)
+          </h2>
+          <div className="mt-3 space-y-2">
+            {unsureAnswers.map((answer) => {
+              const q = questions.find((q) => q.id === answer.questionId);
+              if (!q) return null;
+              return (
+                <div key={q.id} className="flex items-start gap-2 rounded-lg border px-4 py-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <span className="flex-1 text-sm line-clamp-2">{q.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
         <button
@@ -167,6 +255,15 @@ export function PracticeResults({ questions, answers, onRetry }: Props) {
           <RotateCcw className="h-4 w-4" />
           もう一度
         </button>
+        {retryCount > 0 && (
+          <button
+            onClick={onRetryWrong}
+            className="flex items-center gap-2 rounded-lg bg-red-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-600"
+          >
+            <RefreshCw className="h-4 w-4" />
+            要復習{retryCount}問を再挑戦
+          </button>
+        )}
         <Link
           href="/"
           className="flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"

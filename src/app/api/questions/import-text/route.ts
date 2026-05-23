@@ -132,6 +132,7 @@ function parseMaruBatsuText(raw: string) {
   let collectingAdditional = false;
   let judgmentAnswerNum: number | null = null;
   let comboProblemNum: number | null = null;
+  let comboCorrectLabels = new Set<string>();
   let isJudgmentQuestion = false;
 
   const QUESTION_META_RE = /^ロロロ\s*問題\s*(\d+)\s+重要度\s*([ABC])/;
@@ -143,7 +144,7 @@ function parseMaruBatsuText(raw: string) {
   const JUDGMENT_ANSWER_RE = /^ロロロ\s*問題\s*(\d+)\s*$/;
   const ITEM_LABEL_RE = /^([アイウエオカキクケコ])[.．]\s*(.+)/;
   const KATAKANA_LABELS = ['ア', 'イ', 'ウ', 'エ', 'オ', 'カ', 'キ', 'ク', 'ケ', 'コ'];
-  const COMBO_ANSWER_RE = /^ロロロ\s*問題\s*(\d+)\s+正解\s*(\d+)/;
+  const COMBO_ANSWER_RE = /^ロロロ\s*問題\s*(\d+)\s+正解\s*(.*)/;
   const COMBO_ITEM_RE = /^([アイウエオカキクケコ])[.．]?\s*([×○])\s*(.*)/;
 
   function flushQuestion() {
@@ -199,6 +200,9 @@ function parseMaruBatsuText(raw: string) {
     // Skip standalone "問題" header
     if (line === "問題") continue;
 
+    // Skip bracketed section headers (e.g. "[1.セクション名]")
+    if (/^\[\d+[.．].*\]$/.test(line)) continue;
+
     // Normalize OCR artifacts
     line = normalizeAnswer(normalizeLine(line));
 
@@ -214,7 +218,7 @@ function parseMaruBatsuText(raw: string) {
         flushQuestion();
       }
       isJudgmentQuestion = false;
-      const diffMap: Record<string, number> = { A: 3, B: 2, C: 1 };
+      const diffMap: Record<string, number> = { A: 1, B: 2, C: 3 };
       currentQ = {
         num: Number(questionMatch[1]),
         session: currentSession,
@@ -272,6 +276,14 @@ function parseMaruBatsuText(raw: string) {
       }
       comboProblemNum = Number(comboAnswerMatch[1]);
       judgmentAnswerNum = null;
+      // Parse correct labels from answer text (e.g. "イ", "3 (イとウ)")
+      const answerInfo = comboAnswerMatch[2].trim();
+      comboCorrectLabels = new Set<string>();
+      for (const ch of answerInfo) {
+        if (KATAKANA_LABELS.includes(ch)) {
+          comboCorrectLabels.add(ch);
+        }
+      }
       continue;
     }
 
@@ -302,7 +314,7 @@ function parseMaruBatsuText(raw: string) {
         const hasNegation = itemText.includes("該当しない") || itemText.includes("対象外");
         const isCorrect = !hasNegation && (itemText.includes("該当") || itemText.includes("対象"));
         let sourceReference = "";
-        const srcMatch = itemText.match(/(?:該当(?:する|しない)[。．.]?|対象外?取引)\s*(.*)/);
+        const srcMatch = itemText.match(/(?:該当(?:する|しない)[。．.]?|対象外?取引|適用対象外?)\s*(.*)/);
         if (srcMatch && srcMatch[1]) {
           sourceReference = srcMatch[1].trim();
         }
@@ -334,6 +346,24 @@ function parseMaruBatsuText(raw: string) {
         };
         collectingAdditional = false;
         continue;
+      }
+      // Combo item without ○/× (正解ア format) — use comboCorrectLabels
+      if (comboCorrectLabels.size > 0) {
+        const itemMatch = line.match(ITEM_LABEL_RE);
+        if (itemMatch) {
+          flushAnswer();
+          const label = itemMatch[1];
+          const explanationText = itemMatch[2].trim();
+          const cNum = comboProblemNum * 100 + (KATAKANA_LABELS.indexOf(label) + 1);
+          currentA = {
+            num: cNum,
+            isCorrect: comboCorrectLabels.has(label),
+            lines: explanationText ? [explanationText] : [],
+            sourceReference: "",
+          };
+          collectingAdditional = false;
+          continue;
+        }
       }
     }
 

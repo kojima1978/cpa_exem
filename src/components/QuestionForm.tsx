@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import type { TopicData, SessionData } from "@/types";
+import type { TopicData, SessionData, SubjectData } from "@/types";
 
 type ChoiceInput = { text: string; isCorrect: boolean };
 
@@ -26,6 +26,7 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
   const router = useRouter();
   const isEdit = !!questionId;
 
+  const [subjects, setSubjects] = useState<SubjectData[]>([]);
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [saving, setSaving] = useState(false);
@@ -54,6 +55,7 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
   );
 
   useEffect(() => {
+    fetch("/api/subjects").then((r) => r.json()).then(setSubjects);
     fetch("/api/topics").then((r) => r.json()).then(setTopics);
     fetch("/api/sessions").then((r) => r.json()).then(setSessions);
   }, []);
@@ -131,9 +133,17 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
             className={inputClass}
           >
             <option value={0} disabled>選択してください</option>
-            {topics.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
+            {subjects.map((s) => {
+              const subjectTopics = topics.filter((t) => t.subjectId === s.id);
+              if (subjectTopics.length === 0) return null;
+              return (
+                <optgroup key={s.id} label={s.name}>
+                  {subjectTopics.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
         </div>
         <div>
@@ -144,9 +154,17 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
             className={inputClass}
           >
             <option value={0}>なし</option>
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
+            {subjects.map((s) => {
+              const subjectSessions = sessions.filter((ss) => ss.subjectId === s.id);
+              if (subjectSessions.length === 0) return null;
+              return (
+                <optgroup key={s.id} label={s.name}>
+                  {subjectSessions.map((ss) => (
+                    <option key={ss.id} value={ss.id}>{ss.name}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
         </div>
       </div>
@@ -212,15 +230,15 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className={labelClass}>難易度</label>
+          <label className={labelClass}>出題頻度</label>
           <select
             value={difficulty}
             onChange={(e) => setDifficulty(Number(e.target.value))}
             className={inputClass}
           >
-            <option value={1}>1 - 易</option>
-            <option value={2}>2 - 標準</option>
-            <option value={3}>3 - 難</option>
+            <option value={1}>A - 出題高</option>
+            <option value={2}>B - 普通</option>
+            <option value={3}>C - 出題低</option>
           </select>
         </div>
         <div>

@@ -2,18 +2,30 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
-import type { TopicData } from "@/types";
+import type { TopicData, SubjectData } from "@/types";
 
 export default function TopicsPage() {
+  const [subjects, setSubjects] = useState<SubjectData[]>([]);
+  const [subjectId, setSubjectId] = useState<number>(0);
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
 
-  const fetchTopics = useCallback(async () => {
-    const res = await fetch("/api/topics");
-    setTopics(await res.json());
+  useEffect(() => {
+    fetch("/api/subjects")
+      .then((r) => r.json())
+      .then((data: SubjectData[]) => {
+        setSubjects(data);
+        if (data.length > 0 && subjectId === 0) setSubjectId(data[0].id);
+      });
   }, []);
+
+  const fetchTopics = useCallback(async () => {
+    if (!subjectId) return;
+    const res = await fetch(`/api/topics?subjectId=${subjectId}`);
+    setTopics(await res.json());
+  }, [subjectId]);
 
   useEffect(() => {
     fetchTopics();
@@ -21,11 +33,11 @@ export default function TopicsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || !subjectId) return;
     await fetch("/api/topics", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subjectId: 1, name: newName.trim() }),
+      body: JSON.stringify({ subjectId, name: newName.trim() }),
     });
     setNewName("");
     fetchTopics();
@@ -48,90 +60,114 @@ export default function TopicsPage() {
     fetchTopics();
   };
 
+  const currentSubject = subjects.find((s) => s.id === subjectId);
+
   return (
     <div>
       <h1 className="text-xl font-bold">分野管理</h1>
 
-      <form onSubmit={handleCreate} className="mt-4 flex gap-2">
-        <input
-          type="text"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="新しい分野名..."
-          className="flex-1 rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
-        />
-        <button
-          type="submit"
-          className="flex items-center gap-1 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
-        >
-          <Plus className="h-4 w-4" />
-          追加
-        </button>
-      </form>
-
-      <div className="mt-4 space-y-2">
-        {topics.map((topic) => (
-          <div
-            key={topic.id}
-            className="flex items-center gap-3 rounded-lg border bg-white p-3 shadow-sm"
+      <div className="mt-4 flex flex-wrap gap-2">
+        {subjects.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setSubjectId(s.id)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              subjectId === s.id
+                ? "bg-primary-500 text-white"
+                : "border text-gray-600 hover:bg-gray-50"
+            }`}
           >
-            {editingId === topic.id ? (
-              <>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="flex-1 rounded-lg border px-3 py-1.5 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleUpdate(topic.id);
-                    if (e.key === "Escape") setEditingId(null);
-                  }}
-                />
-                <button
-                  onClick={() => handleUpdate(topic.id)}
-                  className="rounded-lg p-2 text-green-600 hover:bg-green-50"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setEditingId(null)}
-                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="flex-1 text-sm font-medium">
-                  {topic.name}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {topic._count?.questions ?? 0} 問
-                </span>
-                <button
-                  onClick={() => {
-                    setEditingId(topic.id);
-                    setEditName(topic.name);
-                  }}
-                  className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-primary-500"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(topic.id)}
-                  className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </>
+            {s.name}
+          </button>
+        ))}
+      </div>
+
+      {currentSubject && (
+        <>
+          <form onSubmit={handleCreate} className="mt-4 flex gap-2">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={`${currentSubject.name} の新しい分野名...`}
+              className="flex-1 rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="flex items-center gap-1 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+            >
+              <Plus className="h-4 w-4" />
+              追加
+            </button>
+          </form>
+
+          <div className="mt-4 space-y-2">
+            {topics.map((topic) => (
+              <div
+                key={topic.id}
+                className="flex items-center gap-3 rounded-lg border bg-white p-3 shadow-sm"
+              >
+                {editingId === topic.id ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="flex-1 rounded-lg border px-3 py-1.5 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleUpdate(topic.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                    />
+                    <button
+                      onClick={() => handleUpdate(topic.id)}
+                      className="rounded-lg p-2 text-green-600 hover:bg-green-50"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm font-medium">
+                      {topic.name}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {topic._count?.questions ?? 0} 問
+                    </span>
+                    <button
+                      onClick={() => {
+                        setEditingId(topic.id);
+                        setEditName(topic.name);
+                      }}
+                      className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-primary-500"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(topic.id)}
+                      className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+            {topics.length === 0 && (
+              <p className="py-8 text-center text-gray-400">
+                {currentSubject.name} の分野がありません
+              </p>
             )}
           </div>
-        ))}
-        {topics.length === 0 && (
-          <p className="py-8 text-center text-gray-400">分野がありません</p>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

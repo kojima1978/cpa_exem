@@ -241,7 +241,7 @@ export default function ImportPage() {
        補足説明文`}</pre>
               <ul className="mt-2 space-y-0.5 text-xs text-amber-600">
                 <li>• セクション → 学習単位として自動登録</li>
-                <li>• 重要度A/B/C → 難易度 難/標準/易</li>
+                <li>• 出題頻度A/B/C → 出題高/普通/出題低</li>
                 <li>• H22→2010, R4→2022（年度自動変換）</li>
                 <li>• 選択肢は「正しい」「誤り」の2択で自動作成</li>
               </ul>
@@ -312,7 +312,7 @@ export default function ImportPage() {
           <ul className="mt-2 space-y-0.5 text-xs text-gray-500">
             <li><strong>topic</strong>: 分野名（未登録の場合は自動作成）</li>
             <li><strong>session</strong>: 学習単位名（省略可、未登録の場合は自動作成）</li>
-            <li><strong>difficulty</strong>: 1=易, 2=標準, 3=難</li>
+            <li><strong>difficulty</strong>: 出題頻度 1=出題高(A), 2=普通(B), 3=出題低(C)</li>
             <li><strong>sourceReference</strong>: 根拠条文（省略可）</li>
             <li><strong>choice1〜5</strong>: 選択肢（最低2つ必須、5まで使用可）</li>
             <li><strong>correct</strong>: 正解の選択肢番号（1〜5）</li>

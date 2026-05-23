@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Star,
   ChevronDown,
@@ -9,11 +9,15 @@ import {
   Square,
   CheckCircle2,
   XCircle,
+  HelpCircle,
+  AlertTriangle,
   Pencil,
   Save,
   X,
   Loader2,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { PracticeQuestion, AnswerRecord } from "@/app/practice/page";
 
 type Props = {
@@ -23,6 +27,8 @@ type Props = {
   answer: AnswerRecord | undefined;
   isBookmarked: boolean;
   onAnswer: (choiceId: number) => void;
+  onSkip: () => void;
+  onUnsure: () => void;
   onNext: () => void;
   onFinish: () => void;
   onToggleBookmark: () => void;
@@ -44,6 +50,8 @@ export function QuestionView({
   answer,
   isBookmarked,
   onAnswer,
+  onSkip,
+  onUnsure,
   onNext,
   onFinish,
   onToggleBookmark,
@@ -78,6 +86,60 @@ export function QuestionView({
       .map((c) => ({ ...c, _sort: Math.random() }))
       .sort((a, b) => a._sort - b._sort);
   }, [question.id, isMaruBatsu]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (editing) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      // Before answering: 1/← for ○, 2/→ for ×, s for skip
+      if (!answered) {
+        if (e.key === "s" || e.key === "S") {
+          e.preventDefault();
+          onSkip();
+          return;
+        }
+        if (isMaruBatsu) {
+          if (e.key === "1" || e.key === "ArrowLeft") {
+            e.preventDefault();
+            const choice = question.choices.find((c) => c.text === "正しい");
+            if (choice) onAnswer(choice.id);
+            return;
+          }
+          if (e.key === "2" || e.key === "ArrowRight") {
+            e.preventDefault();
+            const choice = question.choices.find((c) => c.text === "誤り");
+            if (choice) onAnswer(choice.id);
+            return;
+          }
+        }
+      }
+
+      // After answering: Enter/Space for next, b for bookmark, u for unsure
+      if (answered) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          isLast ? onFinish() : onNext();
+          return;
+        }
+        if (e.key === "b" || e.key === "B") {
+          e.preventDefault();
+          onToggleBookmark();
+          return;
+        }
+        if ((e.key === "u" || e.key === "U") && answer?.isCorrect && !answer?.unsure) {
+          e.preventDefault();
+          onUnsure();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [answered, editing, isMaruBatsu, isLast, question.choices, answer, onAnswer, onSkip, onUnsure, onNext, onFinish, onToggleBookmark]);
 
   const recentHistory = question.answerHistories || [];
   const progressPercent = ((index + (answered ? 1 : 0)) / total) * 100;
@@ -194,7 +256,7 @@ export function QuestionView({
               </span>
             )}
             <span className="rounded bg-gray-100 px-2 py-0.5 text-gray-600">
-              {["", "易", "標準", "難"][question.difficulty]}
+              {["", "出題高", "普通", "出題低"][question.difficulty]}
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -278,7 +340,8 @@ export function QuestionView({
         {/* Choices (hidden in edit mode) */}
         {!editing &&
           (isMaruBatsu ? (
-            <div className="grid grid-cols-2 gap-3 px-5 pb-5">
+            <div className="space-y-3 px-5 pb-5">
+            <div className="grid grid-cols-2 gap-3">
               {question.choices
                 .slice()
                 .sort((a, b) => (a.text === "正しい" ? -1 : 1))
@@ -331,6 +394,17 @@ export function QuestionView({
                   );
                 })}
             </div>
+            {!answered && (
+              <button
+                onClick={onSkip}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 py-2.5 text-sm text-gray-400 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600"
+              >
+                <HelpCircle className="h-4 w-4" />
+                わからない
+                <span className="text-xs opacity-60">(S)</span>
+              </button>
+            )}
+            </div>
           ) : (
             <div className="space-y-2 px-5 pb-5">
               {shuffledChoices.map((choice) => {
@@ -369,6 +443,16 @@ export function QuestionView({
                   </button>
                 );
               })}
+              {!answered && (
+                <button
+                  onClick={onSkip}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 py-2.5 text-sm text-gray-400 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  わからない
+                  <span className="text-xs opacity-60">(S)</span>
+                </button>
+              )}
             </div>
           ))}
       </div>
@@ -378,23 +462,31 @@ export function QuestionView({
         <div className="space-y-3">
           <div
             className={`rounded-xl border p-4 ${
-              answer.isCorrect
-                ? "border-green-200 bg-green-50"
-                : "border-red-200 bg-red-50"
+              answer.skipped
+                ? "border-amber-200 bg-amber-50"
+                : answer.isCorrect
+                  ? "border-green-200 bg-green-50"
+                  : "border-red-200 bg-red-50"
             }`}
           >
             <div className="flex items-center gap-2">
-              {answer.isCorrect ? (
+              {answer.skipped ? (
+                <HelpCircle className="h-5 w-5 text-amber-600" />
+              ) : answer.isCorrect ? (
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
               ) : (
                 <XCircle className="h-5 w-5 text-red-600" />
               )}
               <span
                 className={`font-bold ${
-                  answer.isCorrect ? "text-green-700" : "text-red-700"
+                  answer.skipped
+                    ? "text-amber-700"
+                    : answer.isCorrect
+                      ? "text-green-700"
+                      : "text-red-700"
                 }`}
               >
-                {answer.isCorrect ? "正解！" : "不正解"}
+                {answer.skipped ? "わからない → 復習対象に登録" : answer.isCorrect ? "正解！" : "不正解"}
               </span>
 
               {/* Recent history */}
@@ -504,9 +596,11 @@ export function QuestionView({
                       />
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
-                      {question.detailedExplanation}
-                    </p>
+                    <div className="prose-sm prose-gray max-w-none text-sm leading-relaxed text-gray-700 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mt-3 [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1 [&_li]:my-0.5 [&_p]:my-1 [&_strong]:font-bold [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-gray-100 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:my-2 [&_blockquote]:text-gray-600 [&_table]:w-full [&_table]:text-xs [&_table]:my-2 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-gray-50 [&_th]:font-medium [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_hr]:my-3 [&_hr]:border-gray-200">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {question.detailedExplanation}
+                      </ReactMarkdown>
+                    </div>
                   )}
                 </div>
               )}
@@ -547,6 +641,27 @@ export function QuestionView({
                   <XCircle className="h-4 w-4" />
                   保存に失敗しました
                 </span>
+              )}
+            </div>
+          )}
+
+          {/* Unsure button — only after correct answer, not in edit mode */}
+          {!editing && answer.isCorrect && !answer.skipped && (
+            <div>
+              {answer.unsure ? (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+                  <AlertTriangle className="h-4 w-4" />
+                  自信なし — 復習対象に登録済み
+                </div>
+              ) : (
+                <button
+                  onClick={onUnsure}
+                  className="flex items-center gap-2 rounded-lg border border-amber-300 px-4 py-2.5 text-sm font-medium text-amber-600 transition-colors hover:bg-amber-50"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  自信なし（復習対象に登録）
+                  <span className="text-xs opacity-60">(U)</span>
+                </button>
               )}
             </div>
           )}
