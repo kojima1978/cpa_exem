@@ -126,6 +126,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ questions: [], total: 0 });
     }
     where.topicId = { in: weakTopicIds };
+  } else if (mode === "review") {
+    where.nextReviewAt = { lte: new Date() };
   }
 
   const total = await prisma.question.count({ where });

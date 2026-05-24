@@ -13,20 +13,29 @@ type TopicAccuracy = {
   accuracy: number;
 };
 
+type ModeCounts = {
+  all: number;
+  unanswered: number;
+  bookmarked: number;
+  wrong: number;
+  weak: number;
+  review: number;
+};
+
 type Props = {
   onStart: (params: URLSearchParams) => void;
   initialMode: string;
 };
 
 const MODES = [
-  { value: "all", label: "全問" },
-  { value: "unanswered", label: "未回答のみ" },
-  { value: "session", label: "学習単位指定" },
-  { value: "bookmarked", label: "ブックマークのみ" },
-  { value: "wrong", label: "間違えた問題" },
-  { value: "weak", label: "苦手問題" },
-  { value: "weakTopic", label: "苦手分野" },
-  { value: "review", label: "要復習（間隔反復）" },
+  { value: "all", label: "全問", countKey: "all" as const },
+  { value: "unanswered", label: "未回答のみ", countKey: "unanswered" as const },
+  { value: "session", label: "学習単位指定", countKey: null },
+  { value: "bookmarked", label: "ブックマーク", countKey: "bookmarked" as const },
+  { value: "wrong", label: "間違えた問題", countKey: "wrong" as const },
+  { value: "weak", label: "苦手問題", countKey: "weak" as const },
+  { value: "weakTopic", label: "苦手分野", countKey: null },
+  { value: "review", label: "要復習", countKey: "review" as const },
 ];
 
 export function PracticeSetup({ onStart, initialMode }: Props) {
@@ -41,12 +50,25 @@ export function PracticeSetup({ onStart, initialMode }: Props) {
   const [accuracy, setAccuracy] = useState("50");
   const [limit, setLimit] = useState("20");
   const [topicAccuracies, setTopicAccuracies] = useState<TopicAccuracy[]>([]);
+  const [counts, setCounts] = useState<ModeCounts | null>(null);
 
   useEffect(() => {
     fetch("/api/subjects").then((r) => r.json()).then(setSubjects);
     fetch("/api/topics").then((r) => r.json()).then(setTopics);
     fetch("/api/sessions").then((r) => r.json()).then(setSessions);
   }, []);
+
+  // フィルタ変更時にモード別件数を取得
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (subjectId) params.set("subjectId", subjectId);
+    if (topicId) params.set("topicId", topicId);
+    if (difficulty) params.set("difficulty", difficulty);
+    fetch(`/api/practice/counts?${params.toString()}`)
+      .then((r) => r.json())
+      .then(setCounts)
+      .catch(() => {});
+  }, [subjectId, topicId, difficulty]);
 
   // 科目選択時に分野・学習単位をフィルタ
   const filteredTopics = subjectId
@@ -92,19 +114,31 @@ export function PracticeSetup({ onStart, initialMode }: Props) {
             出題モード
           </label>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {MODES.map((m) => (
-              <button
-                key={m.value}
-                onClick={() => setMode(m.value)}
-                className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
-                  mode === m.value
-                    ? "border-primary-500 bg-primary-50 text-primary-700"
-                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
+            {MODES.map((m) => {
+              const count = m.countKey && counts ? counts[m.countKey] : null;
+              const disabled = count === 0;
+              return (
+                <button
+                  key={m.value}
+                  onClick={() => !disabled && setMode(m.value)}
+                  disabled={disabled}
+                  className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                    disabled
+                      ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
+                      : mode === m.value
+                        ? "border-primary-500 bg-primary-50 text-primary-700"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {m.label}
+                  {count != null && (
+                    <span className={`ml-1 text-xs ${disabled ? "text-gray-300" : "text-gray-400"}`}>
+                      ({count})
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
