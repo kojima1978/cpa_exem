@@ -4,6 +4,7 @@ import { weightedSelect } from "@/lib/weighted-shuffle";
 
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
+  const subjectId = sp.get("subjectId");
   const topicId = sp.get("topicId");
   const sessionId = sp.get("sessionId");
   const difficulty = sp.get("difficulty");
@@ -11,6 +12,9 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(100, Math.max(1, Number(sp.get("limit") || 20)));
 
   const where: Record<string, unknown> = {};
+  if (subjectId && !topicId) {
+    where.topic = { subjectId: Number(subjectId) };
+  }
   if (topicId) where.topicId = Number(topicId);
   if (sessionId) where.sessionId = Number(sessionId);
   if (difficulty) where.difficulty = Number(difficulty);
