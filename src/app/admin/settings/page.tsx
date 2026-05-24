@@ -114,13 +114,22 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <a
-          href="/api/backup"
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
-        >
-          <Download className="h-4 w-4" />
-          バックアップをダウンロード
-        </a>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <a
+            href="/api/backup"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+          >
+            <Download className="h-4 w-4" />
+            DBバックアップ
+          </a>
+          <a
+            href="/api/export"
+            className="inline-flex items-center gap-2 rounded-lg border border-primary-500 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50"
+          >
+            <Download className="h-4 w-4" />
+            JSONエクスポート
+          </a>
+        </div>
       </div>
 
       {/* Restore section */}
