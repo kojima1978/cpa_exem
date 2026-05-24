@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
   }
 
   let imported = 0;
+  let skipped = 0;
   const errors: string[] = [];
 
   for (const q of parsed.questions) {
@@ -49,6 +50,18 @@ export async function POST(request: NextRequest) {
           });
           sessionId = created.id;
         }
+      }
+
+      // 重複チェック: 同一topicId + text で既存があればスキップ
+      const duplicate = await prisma.question.findFirst({
+        where: {
+          topicId: Number(topicId),
+          text: q.text,
+        },
+      });
+      if (duplicate) {
+        skipped++;
+        continue;
       }
 
       await prisma.question.create({
@@ -79,6 +92,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     imported,
+    skipped,
     errors,
     total: parsed.questions.length,
   });
