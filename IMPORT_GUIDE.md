@@ -75,7 +75,7 @@
 
 ## インポート済みの状態
 
-**最終更新: 2026-05-24**
+**最終更新: 2026-05-25**
 
 ### 企業法（154/2,269問）
 
@@ -222,7 +222,9 @@ $response = Invoke-RestMethod -Uri "http://localhost:3020/api/questions/import-t
 $response | ConvertTo-Json -Depth 10
 ```
 
-成功レスポンス: `{ "imported": N, "errors": [], "total": N }`
+成功レスポンス: `{ "imported": N, "skipped": M, "errors": [], "total": N }`
+
+> **重複チェック（2026-05-25追加）**: 同一 `topicId` + `text`（問題文完全一致）が既にDBにあればスキップ。`skipped` に件数が返る。
 
 ### 4. 重複確認（毎回必須）
 
@@ -488,7 +490,7 @@ Invoke-RestMethod -Uri "http://localhost:3020/api/questions/<id>" -Method DELETE
 エ．○ 解説文（「根拠条文」）
 ```
 
-## アプリ改善履歴（2026-05-24）
+## アプリ改善履歴
 
 | 改善 | 内容 |
 |------|------|
@@ -503,10 +505,15 @@ Invoke-RestMethod -Uri "http://localhost:3020/api/questions/<id>" -Method DELETE
 | 出題頻度ラベル | 「難易度: 易/標準/難」→「出題頻度: 出題高/普通/出題低」に統一。diffMap反転・DB更新済み |
 | Markdown詳細解説 | `react-markdown` + `remark-gfm` 導入。詳細解説フィールドでMarkdown記法が正しくレンダリング |
 | バックフィルAPI | `POST /api/review/recalculate` — 既存回答データの `nextReviewAt` 一括計算（デプロイ後1回実行） |
+| インポート重複チェック | 同一topicId+text一致でスキップ。レスポンスに `skipped` フィールド追加 |
+| 科目フィルタ | 演習設定に科目ドロップダウン追加。分野・学習単位が連動フィルタ。APIにも `subjectId` パラメータ追加 |
+| モード別件数表示 | 演習設定のモードボタンに該当件数を表示。0件はグレーアウト。`GET /api/practice/counts` 追加 |
+| 要復習モード修正 | `review` モードに `nextReviewAt` 条件が欠落していたバグを修正。分野絞り込みが正しく効くように |
+| 企業法分野名更新 | DB上の分野名を「第N章 名称」形式に変更（選択しやすくする） |
 
 ## 制約事項
 
 - `npm run build`, `npm install` 等をローカルで実行しない（Docker内で完結）
 - bash/curl は日本語が文字化けするため API呼び出しには PowerShell を使う
-- インポートごとに重複確認を必ず行う
+- インポートAPIに重複チェック機能あり（同一topicId+text一致でスキップ）。手動確認も推奨
 - 問題文・解説文の内容は変更しない（OCR誤読修正のみ）
