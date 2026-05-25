@@ -3,6 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+    ports:
+      - "3020:3000"
+    volumes:
+      - db-data:/app/prisma/data
     environment:
       - NODE_ENV=production
+      - DATABASE_URL=file:/app/prisma/data/cpa-exam.db
     restart: unless-stopped
+
+volumes:
+  db-data:
