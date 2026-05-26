@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Database,
   Download,
@@ -26,7 +26,9 @@ function formatSize(bytes: number): string {
 export default function SettingsPage() {
   const [stats, setStats] = useState<DbStats | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<{
     type: "success" | "error";
     message: string;
@@ -40,6 +42,24 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(fetchStats, [fetchStats]);
+
+  const handleFileSelect = useCallback((selectedFile: File | null) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    if (selectedFile && !selectedFile.name.toLowerCase().endsWith(".db")) {
+      setFile(null);
+      setResult({
+        type: "error",
+        message: "SQLiteファイル（.db）を選択してください",
+      });
+      return;
+    }
+
+    setFile(selectedFile);
+    setResult(null);
+  }, []);
 
   const handleRestore = async () => {
     if (!file) return;
@@ -66,6 +86,9 @@ export default function SettingsPage() {
       if (res.ok) {
         setResult({ type: "success", message: data.message });
         setFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
         fetchStats();
       } else {
         setResult({ type: "error", message: data.error });
@@ -153,17 +176,46 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            <Upload className="h-4 w-4" />
-            {file ? file.name : "ファイルを選択"}
+        <div className="mt-4 space-y-3">
+          <label
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition ${
+              isDragging
+                ? "border-amber-500 bg-amber-50"
+                : "border-gray-300 hover:border-amber-400 hover:bg-amber-50/40"
+            }`}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              handleFileSelect(e.dataTransfer.files?.[0] || null);
+            }}
+          >
+            <Upload className="h-8 w-8 text-amber-500" />
+            <span className="text-sm font-medium text-gray-700">
+              {file ? file.name : "復元するDBファイルをドラッグ＆ドロップ"}
+            </span>
+            <span className="text-xs text-gray-500">
+              クリックしてファイルを選択することもできます
+            </span>
             <input
+              ref={fileInputRef}
               type="file"
               accept=".db"
               className="hidden"
               onChange={(e) => {
-                setFile(e.target.files?.[0] || null);
-                setResult(null);
+                handleFileSelect(e.target.files?.[0] || null);
               }}
             />
           </label>
