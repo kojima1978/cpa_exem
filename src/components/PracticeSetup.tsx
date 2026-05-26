@@ -25,6 +25,7 @@ type ModeCounts = {
 type Props = {
   onStart: (params: URLSearchParams) => void;
   initialMode: string;
+  initialSubjectId?: string;
 };
 
 const MODES = [
@@ -38,12 +39,16 @@ const MODES = [
   { value: "review", label: "要復習", countKey: "review" as const },
 ];
 
-export function PracticeSetup({ onStart, initialMode }: Props) {
+export function PracticeSetup({
+  onStart,
+  initialMode,
+  initialSubjectId = "",
+}: Props) {
   const [subjects, setSubjects] = useState<SubjectData[]>([]);
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [mode, setMode] = useState(initialMode);
-  const [subjectId, setSubjectId] = useState("");
+  const [subjectId, setSubjectId] = useState(initialSubjectId);
   const [topicId, setTopicId] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [difficulty, setDifficulty] = useState("");

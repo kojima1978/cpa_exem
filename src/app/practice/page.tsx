@@ -42,13 +42,16 @@ export default function PracticePage() {
 function PracticePageContent() {
   const searchParams = useSearchParams();
   const initialMode = searchParams.get("mode") || "all";
+  const initialSubjectId = searchParams.get("subjectId") || "";
 
   const [phase, setPhase] = useState<Phase>("setup");
   const [questions, setQuestions] = useState<PracticeQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<number>>(new Set());
-  const startTimeRef = useRef(Date.now());
+  const questionStartedAtRef = useRef(Date.now());
+  const elapsedSecondsByQuestionIdRef = useRef<Map<number, number>>(new Map());
+  const submittedQuestionIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     fetch("/api/bookmarks")
@@ -72,64 +75,128 @@ function PracticePageContent() {
     setQuestions(data.questions);
     setCurrentIndex(0);
     setAnswers([]);
-    startTimeRef.current = Date.now();
+    elapsedSecondsByQuestionIdRef.current.clear();
+    submittedQuestionIdsRef.current.clear();
+    questionStartedAtRef.current = Date.now();
     setPhase("practice");
+  }, []);
+
+  const pauseCurrentQuestionTimer = useCallback(() => {
+    const q = questions[currentIndex];
+    if (!q || answers.some((a) => a.questionId === q.id)) return;
+
+    const elapsed = Math.max(
+      0,
+      Math.round((Date.now() - questionStartedAtRef.current) / 1000),
+    );
+    elapsedSecondsByQuestionIdRef.current.set(
+      q.id,
+      (elapsedSecondsByQuestionIdRef.current.get(q.id) ?? 0) + elapsed,
+    );
+  }, [answers, currentIndex, questions]);
+
+  const getCurrentTimeSpent = useCallback((questionId: number) => {
+    return Math.max(
+      0,
+      (elapsedSecondsByQuestionIdRef.current.get(questionId) ?? 0) +
+        Math.round((Date.now() - questionStartedAtRef.current) / 1000),
+    );
   }, []);
 
   const handleAnswer = useCallback(
     async (choiceId: number) => {
       const q = questions[currentIndex];
-      const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
+      if (
+        !q ||
+        answers.some((a) => a.questionId === q.id) ||
+        submittedQuestionIdsRef.current.has(q.id)
+      ) {
+        return;
+      }
 
+      const timeSpent = getCurrentTimeSpent(q.id);
+      submittedQuestionIdsRef.current.add(q.id);
+
+      try {
+        const res = await fetch("/api/answers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            questionId: q.id,
+            chosenChoiceId: choiceId,
+            timeSpent,
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to save answer");
+        const result = await res.json();
+        elapsedSecondsByQuestionIdRef.current.delete(q.id);
+
+        setAnswers((prev) =>
+          prev.some((a) => a.questionId === q.id)
+            ? prev
+            : [
+                ...prev,
+                {
+                  questionId: q.id,
+                  chosenChoiceId: choiceId,
+                  isCorrect: result.isCorrect,
+                  timeSpent,
+                },
+              ],
+        );
+      } catch {
+        submittedQuestionIdsRef.current.delete(q.id);
+        alert("回答の保存に失敗しました");
+      }
+    },
+    [answers, currentIndex, getCurrentTimeSpent, questions],
+  );
+
+  const handleSkip = useCallback(async () => {
+    const q = questions[currentIndex];
+    if (
+      !q ||
+      answers.some((a) => a.questionId === q.id) ||
+      submittedQuestionIdsRef.current.has(q.id)
+    ) {
+      return;
+    }
+
+    const timeSpent = getCurrentTimeSpent(q.id);
+    submittedQuestionIdsRef.current.add(q.id);
+
+    try {
       const res = await fetch("/api/answers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           questionId: q.id,
-          chosenChoiceId: choiceId,
+          skipped: true,
           timeSpent,
         }),
       });
-      const result = await res.json();
+      if (!res.ok) throw new Error("Failed to save answer");
+      elapsedSecondsByQuestionIdRef.current.delete(q.id);
 
-      setAnswers((prev) => [
-        ...prev,
-        {
-          questionId: q.id,
-          chosenChoiceId: choiceId,
-          isCorrect: result.isCorrect,
-          timeSpent,
-        },
-      ]);
-    },
-    [questions, currentIndex]
-  );
-
-  const handleSkip = useCallback(async () => {
-    const q = questions[currentIndex];
-    const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
-
-    await fetch("/api/answers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        questionId: q.id,
-        skipped: true,
-        timeSpent,
-      }),
-    });
-
-    setAnswers((prev) => [
-      ...prev,
-      {
-        questionId: q.id,
-        chosenChoiceId: 0,
-        isCorrect: false,
-        timeSpent,
-        skipped: true,
-      },
-    ]);
-  }, [questions, currentIndex]);
+      setAnswers((prev) =>
+        prev.some((a) => a.questionId === q.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                questionId: q.id,
+                chosenChoiceId: 0,
+                isCorrect: false,
+                timeSpent,
+                skipped: true,
+              },
+            ],
+      );
+    } catch {
+      submittedQuestionIdsRef.current.delete(q.id);
+      alert("回答の保存に失敗しました");
+    }
+  }, [answers, currentIndex, getCurrentTimeSpent, questions]);
 
   const handleUnsure = useCallback(async (questionId: number) => {
     await fetch("/api/answers/unsure", {
@@ -146,17 +213,26 @@ function PracticePageContent() {
   }, []);
 
   const handleNext = useCallback(() => {
+    pauseCurrentQuestionTimer();
     if (currentIndex + 1 >= questions.length) {
       setPhase("results");
     } else {
       setCurrentIndex((i) => i + 1);
-      startTimeRef.current = Date.now();
+      questionStartedAtRef.current = Date.now();
     }
-  }, [currentIndex, questions.length]);
+  }, [currentIndex, pauseCurrentQuestionTimer, questions.length]);
+
+  const handlePrevious = useCallback(() => {
+    if (currentIndex === 0) return;
+    pauseCurrentQuestionTimer();
+    setCurrentIndex((i) => i - 1);
+    questionStartedAtRef.current = Date.now();
+  }, [currentIndex, pauseCurrentQuestionTimer]);
 
   const handleFinish = useCallback(() => {
+    pauseCurrentQuestionTimer();
     setPhase("results");
-  }, []);
+  }, [pauseCurrentQuestionTimer]);
 
   const handleToggleBookmark = useCallback(async (questionId: number) => {
     const isBookmarked = bookmarkedIds.has(questionId);
@@ -191,6 +267,8 @@ function PracticePageContent() {
     setQuestions([]);
     setAnswers([]);
     setCurrentIndex(0);
+    elapsedSecondsByQuestionIdRef.current.clear();
+    submittedQuestionIdsRef.current.clear();
   }, []);
 
   const handleRetryWrong = useCallback(() => {
@@ -204,12 +282,20 @@ function PracticePageContent() {
     setQuestions(wrongQuestions);
     setCurrentIndex(0);
     setAnswers([]);
-    startTimeRef.current = Date.now();
+    elapsedSecondsByQuestionIdRef.current.clear();
+    submittedQuestionIdsRef.current.clear();
+    questionStartedAtRef.current = Date.now();
     setPhase("practice");
   }, [answers, questions]);
 
   if (phase === "setup") {
-    return <PracticeSetup onStart={handleStart} initialMode={initialMode} />;
+    return (
+      <PracticeSetup
+        onStart={handleStart}
+        initialMode={initialMode}
+        initialSubjectId={initialSubjectId}
+      />
+    );
   }
 
   if (phase === "practice") {
@@ -228,6 +314,8 @@ function PracticePageContent() {
         onAnswer={handleAnswer}
         onSkip={handleSkip}
         onUnsure={() => handleUnsure(currentQuestion.id)}
+        canGoPrevious={currentIndex > 0}
+        onPrevious={handlePrevious}
         onNext={handleNext}
         onFinish={handleFinish}
         onToggleBookmark={() => handleToggleBookmark(currentQuestion.id)}

@@ -5,6 +5,7 @@ import {
   Star,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
   ArrowRight,
   Square,
   CheckCircle2,
@@ -28,6 +29,8 @@ type Props = {
   onAnswer: (choiceId: number) => void;
   onSkip: () => void;
   onUnsure: () => void;
+  canGoPrevious: boolean;
+  onPrevious: () => void;
   onNext: () => void;
   onFinish: () => void;
   onToggleBookmark: () => void;
@@ -57,6 +60,8 @@ export function QuestionView({
   onAnswer,
   onSkip,
   onUnsure,
+  canGoPrevious,
+  onPrevious,
   onNext,
   onFinish,
   onToggleBookmark,
@@ -492,6 +497,18 @@ export function QuestionView({
           ))}
       </div>
 
+      {canGoPrevious && !answered && !editing && (
+        <div className="flex">
+          <button
+            onClick={onPrevious}
+            className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            前の問題へ
+          </button>
+        </div>
+      )}
+
       {/* Answer feedback */}
       {answered && (
         <div className="space-y-3">
@@ -545,7 +562,7 @@ export function QuestionView({
             {isMaruBatsu && (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div
-                  className={`rounded-lg border bg-white/80 p-3 ${
+                  className={`flex items-center justify-between gap-3 rounded-lg border bg-white/80 px-3 py-2 ${
                     answer.skipped
                       ? "border-amber-200"
                       : answer.isCorrect
@@ -557,7 +574,7 @@ export function QuestionView({
                     あなたの回答
                   </div>
                   <div
-                    className={`mt-1 text-lg font-bold ${
+                    className={`text-sm font-bold ${
                       answer.skipped
                         ? "text-amber-700"
                         : answer.isCorrect
@@ -570,9 +587,9 @@ export function QuestionView({
                       : formatMaruBatsuChoice(chosenChoice?.text)}
                   </div>
                 </div>
-                <div className="rounded-lg border border-green-200 bg-white/80 p-3">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-white/80 px-3 py-2">
                   <div className="text-xs font-medium text-gray-500">正解</div>
-                  <div className="mt-1 text-lg font-bold text-green-700">
+                  <div className="text-sm font-bold text-green-700">
                     {formatMaruBatsuChoice(correctChoice?.text)}
                   </div>
                 </div>
@@ -738,7 +755,16 @@ export function QuestionView({
 
           {/* Next / Finish buttons (hidden in edit mode) */}
           {!editing && (
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
+              {canGoPrevious && (
+                <button
+                  onClick={onPrevious}
+                  className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  前の問題へ
+                </button>
+              )}
               {isLast ? (
                 <button
                   onClick={onFinish}

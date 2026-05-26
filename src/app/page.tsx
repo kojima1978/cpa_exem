@@ -42,6 +42,7 @@ async function getHomeData() {
   const answeredMap = new Map(answeredByTopic.map((g) => [g.topicId, g._count]));
 
   const subjectCounts = subjects.map((s) => ({
+    id: s.id,
     name: s.name,
     count: s.topics.reduce((sum, t) => sum + t._count.questions, 0),
     answered: s.topics.reduce((sum, t) => sum + (answeredMap.get(t.id) || 0), 0),
@@ -174,7 +175,7 @@ export default async function HomePage() {
             return subject.active ? (
               <Link
                 key={subject.name}
-                href="/practice"
+                href={`/practice?subjectId=${subject.id}`}
                 className="block rounded-lg border border-primary-200 bg-primary-50 p-4 transition-shadow hover:shadow-md"
               >
                 <div className="flex items-center justify-between">
