@@ -149,7 +149,7 @@ function parseMaruBatsuText(raw: string) {
   let comboCorrectLabels = new Set<string>();
   let isJudgmentQuestion = false;
   let globalQuestionNum = 0;
-  let localToGlobalMap = new Map<number, number>();
+  let localToGlobalMap = new Map<number, number[]>();
 
   const QUESTION_META_RE = /^ロロロ\s*問題\s*(\d+)?\s*重要度\s*([ABC])/;
   const ANSWER_RE = /^ロロロ\s*問題\s*(\d+)?\s*(正しい|誤り)/;
@@ -229,7 +229,7 @@ function parseMaruBatsuText(raw: string) {
         flushAnswer();
         judgmentAnswerNum = null;
         comboProblemNum = null;
-        localToGlobalMap = new Map();
+        localToGlobalMap = new Map<number, number[]>();
         mode = "question";
       } else {
         flushQuestion();
@@ -238,7 +238,10 @@ function parseMaruBatsuText(raw: string) {
       const diffMap: Record<string, number> = { A: 1, B: 2, C: 3 };
       const localNum = questionMatch[1] ? Number(questionMatch[1]) : 1;
       globalQuestionNum++;
-      localToGlobalMap.set(localNum, globalQuestionNum);
+      if (!localToGlobalMap.has(localNum)) {
+        localToGlobalMap.set(localNum, []);
+      }
+      localToGlobalMap.get(localNum)!.push(globalQuestionNum);
       currentQ = {
         num: globalQuestionNum,
         session: currentSession,
@@ -262,7 +265,8 @@ function parseMaruBatsuText(raw: string) {
       // Remaining text after 正しい/誤り on same line = source reference (根拠条文)
       const afterAnswer = line.slice(answerMatch[0].length).trim();
       const answerLocalNum = answerMatch[1] ? Number(answerMatch[1]) : 1;
-      const answerGlobalNum = localToGlobalMap.get(answerLocalNum) ?? answerLocalNum;
+      const answerGlobalNums = localToGlobalMap.get(answerLocalNum);
+      const answerGlobalNum = answerGlobalNums && answerGlobalNums.length > 0 ? answerGlobalNums.shift()! : answerLocalNum;
       currentA = {
         num: answerGlobalNum,
         isCorrect: answerMatch[2] === "正しい",
@@ -282,7 +286,8 @@ function parseMaruBatsuText(raw: string) {
       } else {
         flushAnswer();
       }
-      judgmentAnswerNum = localToGlobalMap.get(Number(judgmentAnswerMatch[1])) ?? Number(judgmentAnswerMatch[1]);
+      const jNums = localToGlobalMap.get(Number(judgmentAnswerMatch[1]));
+      judgmentAnswerNum = jNums && jNums.length > 0 ? jNums.shift()! : Number(judgmentAnswerMatch[1]);
       comboProblemNum = null;
       continue;
     }
@@ -296,7 +301,8 @@ function parseMaruBatsuText(raw: string) {
       } else {
         flushAnswer();
       }
-      comboProblemNum = localToGlobalMap.get(Number(comboAnswerMatch[1])) ?? Number(comboAnswerMatch[1]);
+      const cNums = localToGlobalMap.get(Number(comboAnswerMatch[1]));
+      comboProblemNum = cNums && cNums.length > 0 ? cNums.shift()! : Number(comboAnswerMatch[1]);
       judgmentAnswerNum = null;
       // Parse correct labels from answer text (e.g. "イ", "3 (イとウ)")
       const answerInfo = comboAnswerMatch[2].trim();
