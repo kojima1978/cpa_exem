@@ -14,6 +14,7 @@ import {
   Home,
 } from "lucide-react";
 import Link from "next/link";
+import { MarkdownContent } from "@/components/MarkdownContent";
 import type { PracticeQuestion, AnswerRecord } from "@/app/practice/page";
 
 type Props = {
@@ -158,9 +159,9 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: P
                         </div>
                       </div>
                       {q.briefExplanation && (
-                        <p className="rounded bg-gray-50 p-2 text-sm text-gray-600">
+                        <MarkdownContent className="rounded bg-gray-50 p-2 text-gray-600">
                           {q.briefExplanation}
-                        </p>
+                        </MarkdownContent>
                       )}
                     </div>
                   )}
@@ -211,9 +212,9 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: P
                         </div>
                       </div>
                       {q.briefExplanation && (
-                        <p className="rounded bg-gray-50 p-2 text-sm text-gray-600">
+                        <MarkdownContent className="rounded bg-gray-50 p-2 text-gray-600">
                           {q.briefExplanation}
-                        </p>
+                        </MarkdownContent>
                       )}
                     </div>
                   )}

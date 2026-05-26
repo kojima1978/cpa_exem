@@ -16,8 +16,7 @@ import {
   X,
   Loader2,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownContent } from "@/components/MarkdownContent";
 import type { PracticeQuestion, AnswerRecord } from "@/app/practice/page";
 
 type Props = {
@@ -42,6 +41,12 @@ type EditState = {
   sourceReference: string;
   correctChoiceId: number;
 };
+
+function formatMaruBatsuChoice(text: string | undefined): string {
+  if (text === "正しい") return "○ 正しい";
+  if (text === "誤り") return "× 誤り";
+  return "未選択";
+}
 
 export function QuestionView({
   question,
@@ -79,6 +84,19 @@ export function QuestionView({
     const texts = question.choices.map((c) => c.text).sort();
     return texts[0] === "正しい" && texts[1] === "誤り";
   }, [question.choices]);
+
+  const correctChoice = useMemo(
+    () => question.choices.find((c) => c.isCorrect),
+    [question.choices],
+  );
+
+  const chosenChoice = useMemo(
+    () =>
+      answer?.chosenChoiceId
+        ? question.choices.find((c) => c.id === answer.chosenChoiceId)
+        : undefined,
+    [answer?.chosenChoiceId, question.choices],
+  );
 
   const shuffledChoices = useMemo(() => {
     if (isMaruBatsu) return question.choices;
@@ -145,7 +163,6 @@ export function QuestionView({
   const progressPercent = ((index + (answered ? 1 : 0)) / total) * 100;
 
   const startEditing = () => {
-    const correctChoice = question.choices.find((c) => c.isCorrect);
     setEditState({
       text: question.text,
       briefExplanation: question.briefExplanation,
@@ -390,6 +407,24 @@ export function QuestionView({
                       <span className="text-sm text-gray-600">
                         {choice.text}
                       </span>
+                      <span className="flex min-h-6 flex-wrap items-center justify-center gap-1">
+                        {answered && isChosen && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                              answer.isCorrect
+                                ? "bg-green-600 text-white"
+                                : "bg-red-600 text-white"
+                            }`}
+                          >
+                            あなたの回答
+                          </span>
+                        )}
+                        {answered && choice.isCorrect && (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 ring-1 ring-green-300">
+                            正解
+                          </span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -507,6 +542,43 @@ export function QuestionView({
               )}
             </div>
 
+            {isMaruBatsu && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div
+                  className={`rounded-lg border bg-white/80 p-3 ${
+                    answer.skipped
+                      ? "border-amber-200"
+                      : answer.isCorrect
+                        ? "border-green-200"
+                        : "border-red-200"
+                  }`}
+                >
+                  <div className="text-xs font-medium text-gray-500">
+                    あなたの回答
+                  </div>
+                  <div
+                    className={`mt-1 text-lg font-bold ${
+                      answer.skipped
+                        ? "text-amber-700"
+                        : answer.isCorrect
+                          ? "text-green-700"
+                          : "text-red-700"
+                    }`}
+                  >
+                    {answer.skipped
+                      ? "わからない"
+                      : formatMaruBatsuChoice(chosenChoice?.text)}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-green-200 bg-white/80 p-3">
+                  <div className="text-xs font-medium text-gray-500">正解</div>
+                  <div className="mt-1 text-lg font-bold text-green-700">
+                    {formatMaruBatsuChoice(correctChoice?.text)}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Source reference (根拠条文) */}
             {!editing && question.sourceReference && (
               <p className="mt-2 text-xs text-gray-500">
@@ -536,9 +608,9 @@ export function QuestionView({
               </div>
             ) : (
               question.briefExplanation && (
-                <p className="mt-2 text-sm text-gray-700">
+                <MarkdownContent className="mt-2 text-gray-700">
                   {question.briefExplanation}
-                </p>
+                </MarkdownContent>
               )
             )}
           </div>
@@ -596,11 +668,9 @@ export function QuestionView({
                       />
                     </div>
                   ) : (
-                    <div className="prose-sm prose-gray max-w-none text-sm leading-relaxed text-gray-700 [&_h1]:text-base [&_h1]:font-bold [&_h1]:mt-3 [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1 [&_li]:my-0.5 [&_p]:my-1 [&_strong]:font-bold [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-gray-100 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:my-2 [&_blockquote]:text-gray-600 [&_table]:w-full [&_table]:text-xs [&_table]:my-2 [&_th]:border [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-gray-50 [&_th]:font-medium [&_td]:border [&_td]:border-gray-300 [&_td]:px-2 [&_td]:py-1 [&_hr]:my-3 [&_hr]:border-gray-200">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {question.detailedExplanation}
-                      </ReactMarkdown>
-                    </div>
+                    <MarkdownContent className="text-gray-700">
+                      {question.detailedExplanation}
+                    </MarkdownContent>
                   )}
                 </div>
               )}
