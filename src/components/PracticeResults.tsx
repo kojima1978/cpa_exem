@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   BarChart3,
   Home,
+  Eye,
+  Filter,
 } from "lucide-react";
 import Link from "next/link";
 import { MarkdownContent } from "@/components/MarkdownContent";
@@ -22,10 +24,12 @@ type Props = {
   answers: AnswerRecord[];
   onRetry: () => void;
   onRetryWrong: () => void;
+  reviewLaterIds: Set<number>;
 };
 
-export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: Props) {
+export function PracticeResults({ questions, answers, onRetry, onRetryWrong, reviewLaterIds }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [filterTopic, setFilterTopic] = useState<string | null>(null);
 
   const totalAnswered = answers.length;
   const correctCount = answers.filter((a) => a.isCorrect).length;
@@ -49,7 +53,17 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: P
   const wrongAnswers = answers.filter((a) => !a.isCorrect && !a.skipped);
   const skippedAnswers = answers.filter((a) => a.skipped);
   const unsureAnswers = answers.filter((a) => a.unsure);
+  const reviewLaterAnswers = answers.filter((a) => reviewLaterIds.has(a.questionId));
   const retryCount = wrongAnswers.length + skippedAnswers.length + unsureAnswers.length;
+
+  const topicNames = Array.from(new Set(questions.map((q) => q.topic.name)));
+  const filterByTopic = (list: AnswerRecord[]) =>
+    filterTopic
+      ? list.filter((a) => {
+          const q = questions.find((q) => q.id === a.questionId);
+          return q?.topic.name === filterTopic;
+        })
+      : list;
 
   return (
     <div className="space-y-6">
@@ -109,15 +123,45 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: P
         </div>
       )}
 
+      {/* Topic filter */}
+      {topicNames.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="h-4 w-4 text-gray-400" />
+          <button
+            onClick={() => setFilterTopic(null)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              filterTopic === null
+                ? "bg-primary-500 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            全分野
+          </button>
+          {topicNames.map((name) => (
+            <button
+              key={name}
+              onClick={() => setFilterTopic(name)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                filterTopic === name
+                  ? "bg-primary-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Wrong answers */}
-      {wrongAnswers.length > 0 && (
+      {filterByTopic(wrongAnswers).length > 0 && (
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="flex items-center gap-2 font-bold text-red-600">
             <XCircle className="h-5 w-5" />
-            間違えた問題 ({wrongAnswers.length}問)
+            間違えた問題 ({filterByTopic(wrongAnswers).length}問)
           </h2>
           <div className="mt-3 space-y-2">
-            {wrongAnswers.map((answer) => {
+            {filterByTopic(wrongAnswers).map((answer) => {
               const q = questions.find((q) => q.id === answer.questionId);
               if (!q) return null;
               const isExpanded = expandedId === q.id;
@@ -173,14 +217,14 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: P
       )}
 
       {/* Skipped answers */}
-      {skippedAnswers.length > 0 && (
+      {filterByTopic(skippedAnswers).length > 0 && (
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="flex items-center gap-2 font-bold text-amber-600">
             <HelpCircle className="h-5 w-5" />
-            わからなかった問題 ({skippedAnswers.length}問)
+            わからなかった問題 ({filterByTopic(skippedAnswers).length}問)
           </h2>
           <div className="mt-3 space-y-2">
-            {skippedAnswers.map((answer) => {
+            {filterByTopic(skippedAnswers).map((answer) => {
               const q = questions.find((q) => q.id === answer.questionId);
               if (!q) return null;
               const isExpanded = expandedId === q.id;
@@ -226,20 +270,89 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong }: P
       )}
 
       {/* Unsure answers */}
-      {unsureAnswers.length > 0 && (
+      {filterByTopic(unsureAnswers).length > 0 && (
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="flex items-center gap-2 font-bold text-amber-600">
             <AlertTriangle className="h-5 w-5" />
-            自信なし ({unsureAnswers.length}問)
+            自信なし ({filterByTopic(unsureAnswers).length}問)
           </h2>
           <div className="mt-3 space-y-2">
-            {unsureAnswers.map((answer) => {
+            {filterByTopic(unsureAnswers).map((answer) => {
               const q = questions.find((q) => q.id === answer.questionId);
               if (!q) return null;
               return (
                 <div key={q.id} className="flex items-start gap-2 rounded-lg border px-4 py-3">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
                   <span className="flex-1 text-sm line-clamp-2">{q.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Review later */}
+      {filterByTopic(reviewLaterAnswers).length > 0 && (
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-orange-600">
+            <Eye className="h-5 w-5" />
+            後で確認 ({filterByTopic(reviewLaterAnswers).length}問)
+          </h2>
+          <div className="mt-3 space-y-2">
+            {filterByTopic(reviewLaterAnswers).map((answer) => {
+              const q = questions.find((q) => q.id === answer.questionId);
+              if (!q) return null;
+              const isExpanded = expandedId === q.id;
+              const correctChoice = q.choices.find((c) => c.isCorrect);
+              const chosenChoice = q.choices.find((c) => c.id === answer.chosenChoiceId);
+              return (
+                <div key={q.id} className="rounded-lg border">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : q.id)}
+                    className="flex w-full items-start gap-2 px-4 py-3 text-left hover:bg-gray-50"
+                  >
+                    <Eye className="mt-0.5 h-4 w-4 shrink-0 text-orange-400" />
+                    <span className="flex-1 text-sm line-clamp-2">{q.text}</span>
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-bold ${answer.isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {answer.isCorrect ? "○" : "×"}
+                    </span>
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+                    )}
+                  </button>
+                  {isExpanded && (
+                    <div className="border-t px-4 py-3 space-y-2">
+                      {chosenChoice && (
+                        <div className="flex items-start gap-2 text-sm">
+                          {answer.isCorrect ? (
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                          ) : (
+                            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                          )}
+                          <div>
+                            <span className="text-xs text-gray-400">あなたの回答:</span>
+                            <p className={answer.isCorrect ? "text-green-700" : "text-red-600"}>{chosenChoice.text}</p>
+                          </div>
+                        </div>
+                      )}
+                      {!answer.isCorrect && correctChoice && (
+                        <div className="flex items-start gap-2 text-sm">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                          <div>
+                            <span className="text-xs text-gray-400">正解:</span>
+                            <p className="text-green-700">{correctChoice.text}</p>
+                          </div>
+                        </div>
+                      )}
+                      {q.briefExplanation && (
+                        <MarkdownContent className="rounded bg-gray-50 p-2 text-gray-600">
+                          {q.briefExplanation}
+                        </MarkdownContent>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Star,
   ChevronDown,
@@ -16,6 +16,8 @@ import {
   Save,
   X,
   Loader2,
+  Clock,
+  Eye,
 } from "lucide-react";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import type { PracticeQuestion, AnswerRecord } from "@/app/practice/page";
@@ -35,6 +37,13 @@ type Props = {
   onFinish: () => void;
   onToggleBookmark: () => void;
   onQuestionUpdate?: (updated: PracticeQuestion) => void;
+  allQuestions: PracticeQuestion[];
+  allAnswers: AnswerRecord[];
+  onJumpTo: (index: number) => void;
+  sessionStartedAt: number;
+  isReviewLater: boolean;
+  onToggleReviewLater: () => void;
+  reviewLaterIds: Set<number>;
 };
 
 type EditState = {
@@ -66,6 +75,13 @@ export function QuestionView({
   onFinish,
   onToggleBookmark,
   onQuestionUpdate,
+  allQuestions,
+  allAnswers,
+  onJumpTo,
+  sessionStartedAt,
+  isReviewLater,
+  onToggleReviewLater,
+  reviewLaterIds,
 }: Props) {
   const [showDetailed, setShowDetailed] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -80,6 +96,22 @@ export function QuestionView({
     sourceReference: "",
     correctChoiceId: 0,
   });
+
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - sessionStartedAt) / 1000));
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [sessionStartedAt]);
+
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   const answered = !!answer;
   const isLast = index + 1 >= total;
@@ -167,6 +199,9 @@ export function QuestionView({
   const recentHistory = question.answerHistories || [];
   const progressPercent = ((index + (answered ? 1 : 0)) / total) * 100;
 
+  const correctCount = allAnswers.filter((a) => a.isCorrect).length;
+  const answeredCount = allAnswers.length;
+
   const startEditing = () => {
     setEditState({
       text: question.text,
@@ -252,17 +287,59 @@ export function QuestionView({
 
   return (
     <div className="space-y-4">
-      {/* Progress bar */}
-      <div className="flex items-center gap-3">
-        <div className="h-2 flex-1 rounded-full bg-gray-200">
-          <div
-            className="h-2 rounded-full bg-primary-500 transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          />
+      {/* Progress + Stats */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="h-2 flex-1 rounded-full bg-gray-200">
+            <div
+              className="h-2 rounded-full bg-primary-500 transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-sm text-gray-500">
+            {index + 1} / {total}
+          </span>
+          {answeredCount > 0 && (
+            <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+              {correctCount}/{answeredCount}正解
+              <span className="ml-1 text-gray-400">
+                ({Math.round((correctCount / answeredCount) * 100)}%)
+              </span>
+            </span>
+          )}
+          <span className="shrink-0 flex items-center gap-1 text-xs text-gray-400">
+            <Clock className="h-3 w-3" />
+            {formatTime(elapsedSeconds)}
+          </span>
         </div>
-        <span className="shrink-0 text-sm text-gray-500">
-          {index + 1} / {total}
-        </span>
+
+        {/* Question dots */}
+        <div className="flex flex-wrap gap-1">
+          {allQuestions.map((q, i) => {
+            const a = allAnswers.find((ans) => ans.questionId === q.id);
+            const isCurrent = i === index;
+            const isMarked = reviewLaterIds.has(q.id);
+            let dotClass = "bg-gray-200 text-gray-400";
+            if (isCurrent) {
+              dotClass = "bg-primary-500 text-white ring-2 ring-primary-300";
+            } else if (a?.skipped) {
+              dotClass = "bg-amber-400 text-white";
+            } else if (a && !a.isCorrect) {
+              dotClass = "bg-red-400 text-white";
+            } else if (a?.isCorrect) {
+              dotClass = "bg-green-400 text-white";
+            }
+            return (
+              <button
+                key={q.id}
+                onClick={() => onJumpTo(i)}
+                className={`h-6 min-w-6 rounded-full text-xs font-medium transition-all hover:opacity-80 ${dotClass} ${isMarked ? "ring-2 ring-orange-400" : ""}`}
+              >
+                {i + 1}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Question card */}
@@ -440,7 +517,7 @@ export function QuestionView({
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 py-2.5 text-sm text-gray-400 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600"
               >
                 <HelpCircle className="h-4 w-4" />
-                わからない
+                分からないので答えを見る
                 <span className="text-xs opacity-60">(S)</span>
               </button>
             )}
@@ -489,7 +566,7 @@ export function QuestionView({
                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 py-2.5 text-sm text-gray-400 transition-colors hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600"
                 >
                   <HelpCircle className="h-4 w-4" />
-                  わからない
+                  分からないので答えを見る
                   <span className="text-xs opacity-60">(S)</span>
                 </button>
               )}
@@ -751,6 +828,21 @@ export function QuestionView({
                 </button>
               )}
             </div>
+          )}
+
+          {/* Review later button */}
+          {!editing && (
+            <button
+              onClick={onToggleReviewLater}
+              className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+                isReviewLater
+                  ? "border-orange-300 bg-orange-50 text-orange-600"
+                  : "border-gray-300 text-gray-500 hover:bg-gray-50"
+              }`}
+            >
+              <Eye className="h-4 w-4" />
+              {isReviewLater ? "後で確認 ✓" : "後で確認"}
+            </button>
           )}
 
           {/* Next / Finish buttons (hidden in edit mode) */}

@@ -54,6 +54,7 @@ export function PracticeSetup({
   const [difficulty, setDifficulty] = useState("");
   const [accuracy, setAccuracy] = useState("50");
   const [limit, setLimit] = useState("20");
+  const [shuffle, setShuffle] = useState(false);
   const [topicAccuracies, setTopicAccuracies] = useState<TopicAccuracy[]>([]);
   const [counts, setCounts] = useState<ModeCounts | null>(null);
 
@@ -105,6 +106,7 @@ export function PracticeSetup({
     if (sessionId) params.set("sessionId", sessionId);
     if (difficulty) params.set("difficulty", difficulty);
     if (mode === "weak" || mode === "weakTopic") params.set("accuracy", accuracy);
+    if (shuffle) params.set("shuffle", "1");
     onStart(params);
   };
 
@@ -326,6 +328,16 @@ export function PracticeSetup({
             </select>
           </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={shuffle}
+            onChange={(e) => setShuffle(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+          />
+          出題順をシャッフル
+        </label>
 
         <button
           onClick={handleStart}

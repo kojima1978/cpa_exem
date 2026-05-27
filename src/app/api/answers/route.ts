@@ -5,8 +5,9 @@ import { calculateSM2 } from "@/lib/sm2";
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const skipped = !!body.skipped;
+  const reviewMode = !!body.reviewMode;
 
-  let isCorrect = false;
+  let actuallyCorrect = false;
   let chosenChoiceId = 0;
 
   if (skipped) {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "選択肢が見つかりません" }, { status: 400 });
     }
     chosenChoiceId = firstChoice.id;
-    isCorrect = false;
+    actuallyCorrect = false;
   } else {
     const choice = await prisma.choice.findUnique({
       where: { id: body.chosenChoiceId },
@@ -29,8 +30,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "選択肢が見つかりません" }, { status: 400 });
     }
     chosenChoiceId = choice.id;
-    isCorrect = choice.isCorrect;
+    actuallyCorrect = choice.isCorrect;
   }
+
+  // 要復習モード: 正解しても不正解として記録（復習キューに残す）
+  const isCorrect = reviewMode ? false : actuallyCorrect;
 
   const history = await prisma.answerHistory.create({
     data: {
@@ -72,6 +76,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     id: history.id,
-    isCorrect,
+    isCorrect: actuallyCorrect,
   });
 }

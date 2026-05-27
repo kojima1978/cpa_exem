@@ -49,6 +49,9 @@ function PracticePageContent() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<number>>(new Set());
+  const [isReviewSession, setIsReviewSession] = useState(false);
+  const [reviewLaterIds, setReviewLaterIds] = useState<Set<number>>(new Set());
+  const sessionStartedAtRef = useRef(Date.now());
   const questionStartedAtRef = useRef(Date.now());
   const elapsedSecondsByQuestionIdRef = useRef<Map<number, number>>(new Map());
   const submittedQuestionIdsRef = useRef<Set<number>>(new Set());
@@ -72,11 +75,18 @@ function PracticePageContent() {
       alert("条件に一致する問題がありません");
       return;
     }
-    setQuestions(data.questions);
+    const shuffle = params.get("shuffle") === "1";
+    const qs = shuffle
+      ? [...data.questions].sort(() => Math.random() - 0.5)
+      : data.questions;
+    setQuestions(qs);
     setCurrentIndex(0);
     setAnswers([]);
+    setIsReviewSession(mode === "review");
+    setReviewLaterIds(new Set());
     elapsedSecondsByQuestionIdRef.current.clear();
     submittedQuestionIdsRef.current.clear();
+    sessionStartedAtRef.current = Date.now();
     questionStartedAtRef.current = Date.now();
     setPhase("practice");
   }, []);
@@ -125,6 +135,7 @@ function PracticePageContent() {
             questionId: q.id,
             chosenChoiceId: choiceId,
             timeSpent,
+            ...(isReviewSession && { reviewMode: true }),
           }),
         });
         if (!res.ok) throw new Error("Failed to save answer");
@@ -149,7 +160,7 @@ function PracticePageContent() {
         alert("回答の保存に失敗しました");
       }
     },
-    [answers, currentIndex, getCurrentTimeSpent, questions],
+    [answers, currentIndex, getCurrentTimeSpent, isReviewSession, questions],
   );
 
   const handleSkip = useCallback(async () => {
@@ -173,6 +184,7 @@ function PracticePageContent() {
           questionId: q.id,
           skipped: true,
           timeSpent,
+          ...(isReviewSession && { reviewMode: true }),
         }),
       });
       if (!res.ok) throw new Error("Failed to save answer");
@@ -196,7 +208,7 @@ function PracticePageContent() {
       submittedQuestionIdsRef.current.delete(q.id);
       alert("回答の保存に失敗しました");
     }
-  }, [answers, currentIndex, getCurrentTimeSpent, questions]);
+  }, [answers, currentIndex, getCurrentTimeSpent, isReviewSession, questions]);
 
   const handleUnsure = useCallback(async (questionId: number) => {
     await fetch("/api/answers/unsure", {
@@ -262,11 +274,32 @@ function PracticePageContent() {
     [],
   );
 
+  const handleToggleReviewLater = useCallback((questionId: number) => {
+    setReviewLaterIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(questionId)) {
+        next.delete(questionId);
+      } else {
+        next.add(questionId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleJumpTo = useCallback((targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex >= questions.length || targetIndex === currentIndex) return;
+    pauseCurrentQuestionTimer();
+    setCurrentIndex(targetIndex);
+    questionStartedAtRef.current = Date.now();
+  }, [currentIndex, pauseCurrentQuestionTimer, questions.length]);
+
   const handleRetry = useCallback(() => {
     setPhase("setup");
     setQuestions([]);
     setAnswers([]);
     setCurrentIndex(0);
+    setIsReviewSession(false);
+    setReviewLaterIds(new Set());
     elapsedSecondsByQuestionIdRef.current.clear();
     submittedQuestionIdsRef.current.clear();
   }, []);
@@ -282,8 +315,11 @@ function PracticePageContent() {
     setQuestions(wrongQuestions);
     setCurrentIndex(0);
     setAnswers([]);
+    setIsReviewSession(true);
+    setReviewLaterIds(new Set());
     elapsedSecondsByQuestionIdRef.current.clear();
     submittedQuestionIdsRef.current.clear();
+    sessionStartedAtRef.current = Date.now();
     questionStartedAtRef.current = Date.now();
     setPhase("practice");
   }, [answers, questions]);
@@ -320,6 +356,13 @@ function PracticePageContent() {
         onFinish={handleFinish}
         onToggleBookmark={() => handleToggleBookmark(currentQuestion.id)}
         onQuestionUpdate={handleQuestionUpdate}
+        allQuestions={questions}
+        allAnswers={answers}
+        onJumpTo={handleJumpTo}
+        sessionStartedAt={sessionStartedAtRef.current}
+        isReviewLater={reviewLaterIds.has(currentQuestion.id)}
+        onToggleReviewLater={() => handleToggleReviewLater(currentQuestion.id)}
+        reviewLaterIds={reviewLaterIds}
       />
     );
   }
@@ -330,6 +373,7 @@ function PracticePageContent() {
       answers={answers}
       onRetry={handleRetry}
       onRetryWrong={handleRetryWrong}
+      reviewLaterIds={reviewLaterIds}
     />
   );
 }
