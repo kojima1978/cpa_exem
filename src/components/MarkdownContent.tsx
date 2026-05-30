@@ -2,6 +2,9 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 type Props = {
   children: string;
@@ -14,7 +17,9 @@ const markdownClassName =
 export function MarkdownContent({ children, className = "" }: Props) {
   return (
     <div className={`${markdownClassName} ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+        {children}
+      </ReactMarkdown>
     </div>
   );
 }
