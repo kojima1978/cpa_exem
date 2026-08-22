@@ -11,10 +11,12 @@ export async function GET() {
     const fileStats = await stat(dbPath);
     const questionCount = await prisma.question.count();
     const topicCount = await prisma.topic.count();
+    const materialCount = await prisma.material.count();
 
     return NextResponse.json({
       questionCount,
       topicCount,
+      materialCount,
       fileSize: fileStats.size,
       lastModified: fileStats.mtime.toISOString(),
     });

@@ -44,6 +44,8 @@ export default function EditQuestionPage({
             briefExplanation: question.briefExplanation,
             detailedExplanation: question.detailedExplanation,
             sourceReference: question.sourceReference,
+            materialId: question.materialId,
+            sourcePage: question.sourcePage,
             year: question.year,
             choices: question.choices.map((c) => ({
               text: c.text,

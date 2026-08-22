@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import type { TopicData, SessionData, SubjectData } from "@/types";
+import type { MaterialData, TopicData, SessionData, SubjectData } from "@/types";
 
 type ChoiceInput = { text: string; isCorrect: boolean };
 
@@ -16,6 +16,8 @@ type QuestionFormProps = {
     briefExplanation: string;
     detailedExplanation: string;
     sourceReference: string;
+    materialId: number | null;
+    sourcePage: number | null;
     year: number | null;
     choices: ChoiceInput[];
   };
@@ -29,6 +31,7 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
   const [subjects, setSubjects] = useState<SubjectData[]>([]);
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [materials, setMaterials] = useState<MaterialData[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [topicId, setTopicId] = useState(initialData?.topicId ?? 0);
@@ -44,6 +47,8 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
   const [sourceReference, setSourceReference] = useState(
     initialData?.sourceReference ?? ""
   );
+  const [materialId, setMaterialId] = useState(initialData?.materialId ?? 0);
+  const [sourcePage, setSourcePage] = useState(initialData?.sourcePage ?? null);
   const [year, setYear] = useState(initialData?.year ?? null);
   const [choices, setChoices] = useState<ChoiceInput[]>(
     initialData?.choices ?? [
@@ -58,6 +63,7 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
     fetch("/api/subjects").then((r) => r.json()).then(setSubjects);
     fetch("/api/topics").then((r) => r.json()).then(setTopics);
     fetch("/api/sessions").then((r) => r.json()).then(setSessions);
+    fetch("/api/materials").then((r) => r.json()).then(setMaterials);
   }, []);
 
   const updateChoice = (index: number, field: keyof ChoiceInput, value: string | boolean) => {
@@ -95,6 +101,8 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
       briefExplanation,
       detailedExplanation,
       sourceReference,
+      materialId: materialId || null,
+      sourcePage: sourcePage || null,
       year: year || null,
       choices,
     };
@@ -284,6 +292,37 @@ export function QuestionForm({ initialData, questionId }: QuestionFormProps) {
           className={inputClass}
           placeholder="例: 「企業会計原則」第一 一"
         />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-[1fr_160px]">
+        <div>
+          <label className={labelClass}>参照PDF</label>
+          <select
+            value={materialId}
+            onChange={(e) => setMaterialId(Number(e.target.value))}
+            className={inputClass}
+          >
+            <option value={0}>なし</option>
+            {materials.map((material) => (
+              <option key={material.id} value={material.id}>
+                {material.title}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>ページ</label>
+          <input
+            type="number"
+            min={1}
+            value={sourcePage ?? ""}
+            onChange={(e) =>
+              setSourcePage(e.target.value ? Number(e.target.value) : null)
+            }
+            className={inputClass}
+            placeholder="例: 12"
+          />
+        </div>
       </div>
 
       <div className="flex gap-3">

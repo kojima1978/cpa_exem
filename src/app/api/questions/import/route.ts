@@ -21,12 +21,21 @@ export async function POST(request: NextRequest) {
   }
 
   const subjects = await prisma.subject.findMany();
+  const subjectCache = new Map(subjects.map((s) => [s.name, s.id]));
   const defaultSubjectId = subjects[0]?.id;
   if (!defaultSubjectId) {
     return NextResponse.json(
       { error: "科目が存在しません。先にシードデータを作成してください" },
       { status: 400 }
     );
+  }
+
+  const materials = await prisma.material.findMany();
+  const materialCache = new Map<string, number>();
+  for (const material of materials) {
+    materialCache.set(normalizeMaterialName(material.title), material.id);
+    materialCache.set(normalizeMaterialName(material.originalName), material.id);
+    materialCache.set(normalizeMaterialName(material.fileName), material.id);
   }
 
   let imported = 0;
@@ -46,15 +55,30 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      let subjectId = defaultSubjectId;
+      if (item.subject?.trim()) {
+        const subjectName = item.subject.trim();
+        const cachedSubjectId = subjectCache.get(subjectName);
+        if (cachedSubjectId) {
+          subjectId = cachedSubjectId;
+        } else {
+          const newSubject = await prisma.subject.create({
+            data: { name: subjectName },
+          });
+          subjectCache.set(subjectName, newSubject.id);
+          subjectId = newSubject.id;
+        }
+      }
+
       let topicId: number;
       const existingTopic = await prisma.topic.findFirst({
-        where: { name: item.topic, subjectId: defaultSubjectId },
+        where: { name: item.topic, subjectId },
       });
       if (existingTopic) {
         topicId = existingTopic.id;
       } else {
         const newTopic = await prisma.topic.create({
-          data: { subjectId: defaultSubjectId, name: item.topic },
+          data: { subjectId, name: item.topic },
         });
         topicId = newTopic.id;
       }
@@ -62,28 +86,37 @@ export async function POST(request: NextRequest) {
       let sessionId: number | null = null;
       if (item.session) {
         const existingSession = await prisma.session.findFirst({
-          where: { name: item.session, subjectId: defaultSubjectId },
+          where: { name: item.session, subjectId },
         });
         if (existingSession) {
           sessionId = existingSession.id;
         } else {
           const newSession = await prisma.session.create({
-            data: { subjectId: defaultSubjectId, name: item.session },
+            data: { subjectId, name: item.session },
           });
           sessionId = newSession.id;
         }
       }
 
+      const materialId = item.sourcePdf
+        ? materialCache.get(normalizeMaterialName(item.sourcePdf)) ?? null
+        : null;
+      const sourceReference =
+        item.sourceReference?.trim() ||
+        (item.sourcePdf && !materialId ? `PDF: ${item.sourcePdf}` : "");
+
       await prisma.question.create({
         data: {
           topicId,
           sessionId,
+          materialId,
           text: item.text,
-          difficulty: item.difficulty ?? 1,
+          difficulty: parseImportDifficulty(item.difficulty),
           briefExplanation: item.briefExplanation ?? "",
           detailedExplanation: item.detailedExplanation ?? "",
-          sourceReference: item.sourceReference ?? "",
-          year: item.year ?? null,
+          sourceReference,
+          sourcePage: Number(item.sourcePage) || null,
+          year: Number(item.year) || null,
           choices: {
             create: item.choices.map((c, j) => ({
               text: c.text,
@@ -103,38 +136,38 @@ export async function POST(request: NextRequest) {
 }
 
 function parseCSV(text: string): ImportQuestion[] {
-  const lines = text.trim().split("\n");
-  if (lines.length < 2) return [];
+  const rows = parseCSVRows(text);
+  if (rows.length < 2) return [];
 
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+  const headers = rows[0].map((h) => normalizeHeader(h));
   const questions: ImportQuestion[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCSVLine(lines[i]);
+  for (let i = 1; i < rows.length; i++) {
+    const values = rows[i];
     const row: Record<string, string> = {};
     headers.forEach((h, j) => (row[h] = values[j] || ""));
 
-    const choices: { text: string; isCorrect: boolean }[] = [];
-    for (let n = 1; n <= 5; n++) {
-      const choiceText = row[`choice${n}`];
-      if (choiceText) {
-        choices.push({
-          text: choiceText,
-          isCorrect: String(row.correct) === String(n),
-        });
-      }
-    }
+    const choices = parseChoices(row);
 
-    if (row.text && choices.length > 0) {
+    const textValue = getRowValue(row, "text", "question", "questiontext", "問題文");
+    if (textValue && choices.length > 0) {
       questions.push({
-        topic: row.topic || "未分類",
-        session: row.session || undefined,
-        text: row.text,
-        difficulty: Number(row.difficulty) || 1,
-        briefExplanation: row.briefExplanation || "",
-        detailedExplanation: row.detailedExplanation || "",
-        sourceReference: row.sourceReference || "",
-        year: Number(row.year) || undefined,
+        subject: getRowValue(row, "subject", "科目") || undefined,
+        topic: getRowValue(row, "topic", "分野") || "未分類",
+        session: getRowValue(row, "session", "学習単位") || undefined,
+        text: textValue,
+        difficulty: parseDifficulty(getRowValue(row, "difficulty", "重要度")),
+        briefExplanation: getRowValue(row, "briefexplanation", "簡易解説") || "",
+        detailedExplanation:
+          getRowValue(row, "detailedexplanation", "explanation", "解説") || "",
+        sourceReference:
+          getRowValue(row, "sourcereference", "根拠条文", "参照") || "",
+        sourcePdf:
+          getRowValue(row, "sourcepdf", "pdf", "material", "資料pdf") ||
+          undefined,
+        sourcePage:
+          Number(getRowValue(row, "sourcepage", "page", "ページ")) || undefined,
+        year: Number(getRowValue(row, "year", "年度")) || undefined,
         choices,
       });
     }
@@ -143,15 +176,56 @@ function parseCSV(text: string): ImportQuestion[] {
   return questions;
 }
 
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
+function parseChoices(row: Record<string, string>) {
+  const letterAnswer = getRowValue(
+    row,
+    "correctanswer",
+    "correct_answer",
+    "answer",
+    "正解",
+  )
+    .trim()
+    .toUpperCase();
+
+  const letterChoices: { text: string; isCorrect: boolean }[] = [];
+  for (const letter of ["A", "B", "C", "D", "E"]) {
+    const choiceText = getRowValue(row, `choice${letter.toLowerCase()}`);
+    if (choiceText) {
+      letterChoices.push({
+        text: choiceText,
+        isCorrect:
+          letterAnswer === letter ||
+          letterAnswer === choiceText.trim().toUpperCase(),
+      });
+    }
+  }
+  if (letterChoices.length > 0) return letterChoices;
+
+  const numericAnswer = getRowValue(row, "correct").trim();
+  const choices: { text: string; isCorrect: boolean }[] = [];
+  for (let n = 1; n <= 5; n++) {
+    const choiceText = getRowValue(row, `choice${n}`);
+    if (choiceText) {
+      choices.push({
+        text: choiceText,
+        isCorrect: numericAnswer === String(n),
+      });
+    }
+  }
+
+  return choices;
+}
+
+function parseCSVRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
   let current = "";
   let inQuotes = false;
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
     if (inQuotes) {
-      if (char === '"' && line[i + 1] === '"') {
+      if (char === '"' && text[i + 1] === '"') {
         current += '"';
         i++;
       } else if (char === '"') {
@@ -159,17 +233,51 @@ function parseCSVLine(line: string): string[] {
       } else {
         current += char;
       }
-    } else {
-      if (char === '"') {
-        inQuotes = true;
-      } else if (char === ",") {
-        result.push(current.trim());
-        current = "";
-      } else {
-        current += char;
-      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ",") {
+      row.push(current.trim());
+      current = "";
+    } else if (char === "\n") {
+      row.push(current.trim());
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+      current = "";
+    } else if (char !== "\r") {
+      current += char;
     }
   }
-  result.push(current.trim());
-  return result;
+
+  row.push(current.trim());
+  if (row.some((value) => value !== "")) rows.push(row);
+  return rows;
+}
+
+function normalizeHeader(value: string) {
+  return value.trim().replace(/^\uFEFF/, "").replace(/^"|"$/g, "").toLowerCase();
+}
+
+function getRowValue(row: Record<string, string>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = row[normalizeHeader(key)];
+    if (value !== undefined) return value.trim();
+  }
+  return "";
+}
+
+function parseDifficulty(value: string) {
+  const v = value.trim().toUpperCase();
+  if (v === "A") return 1;
+  if (v === "B") return 2;
+  if (v === "C") return 3;
+  return Number(v) || 1;
+}
+
+function parseImportDifficulty(value: unknown) {
+  if (typeof value === "string") return parseDifficulty(value);
+  return Number(value) || 1;
+}
+
+function normalizeMaterialName(value: string) {
+  return value.trim().toLowerCase().replace(/\.pdf$/i, "");
 }

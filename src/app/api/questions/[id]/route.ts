@@ -10,6 +10,17 @@ export async function GET(_request: NextRequest, { params }: Params) {
     include: {
       topic: { select: { id: true, name: true } },
       session: { select: { id: true, name: true } },
+      material: {
+        select: {
+          id: true,
+          title: true,
+          originalName: true,
+          fileName: true,
+          mimeType: true,
+          size: true,
+          createdAt: true,
+        },
+      },
       choices: { orderBy: { displayOrder: "asc" } },
     },
   });
@@ -32,11 +43,13 @@ export async function PUT(request: NextRequest, { params }: Params) {
     data: {
       topicId: body.topicId,
       sessionId: body.sessionId || null,
+      materialId: body.materialId || null,
       text: body.text,
       difficulty: body.difficulty ?? 1,
       briefExplanation: body.briefExplanation ?? "",
       detailedExplanation: body.detailedExplanation ?? "",
       sourceReference: body.sourceReference ?? "",
+      sourcePage: body.sourcePage || null,
       year: body.year || null,
       choices: {
         create: body.choices.map(
@@ -51,6 +64,17 @@ export async function PUT(request: NextRequest, { params }: Params) {
     include: {
       topic: { select: { id: true, name: true } },
       session: { select: { id: true, name: true } },
+      material: {
+        select: {
+          id: true,
+          title: true,
+          originalName: true,
+          fileName: true,
+          mimeType: true,
+          size: true,
+          createdAt: true,
+        },
+      },
       choices: { orderBy: { displayOrder: "asc" } },
     },
   });
@@ -72,6 +96,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     data.detailedExplanation = body.detailedExplanation;
   if (body.sourceReference !== undefined)
     data.sourceReference = body.sourceReference;
+  if (body.materialId !== undefined) data.materialId = body.materialId || null;
+  if (body.sourcePage !== undefined) data.sourcePage = body.sourcePage || null;
 
   // Update question fields if any
   if (Object.keys(data).length > 0) {
@@ -96,6 +122,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     include: {
       topic: { select: { id: true, name: true } },
       session: { select: { id: true, name: true } },
+      material: {
+        select: {
+          id: true,
+          title: true,
+          originalName: true,
+          fileName: true,
+          mimeType: true,
+          size: true,
+          createdAt: true,
+        },
+      },
       choices: { orderBy: { displayOrder: "asc" } },
     },
   });

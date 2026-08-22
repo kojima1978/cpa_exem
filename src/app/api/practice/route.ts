@@ -157,6 +157,17 @@ export async function GET(request: NextRequest) {
     include: {
       topic: { select: { id: true, name: true } },
       session: { select: { id: true, name: true } },
+      material: {
+        select: {
+          id: true,
+          title: true,
+          originalName: true,
+          fileName: true,
+          mimeType: true,
+          size: true,
+          createdAt: true,
+        },
+      },
       choices: { orderBy: { displayOrder: "asc" } },
       bookmarks: { select: { id: true } },
       answerHistories: {

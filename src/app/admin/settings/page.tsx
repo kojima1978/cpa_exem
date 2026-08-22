@@ -13,6 +13,7 @@ import {
 type DbStats = {
   questionCount: number;
   topicCount: number;
+  materialCount: number;
   fileSize: number;
   lastModified: string;
 };
@@ -48,11 +49,12 @@ export default function SettingsPage() {
       fileInputRef.current.value = "";
     }
 
-    if (selectedFile && !selectedFile.name.toLowerCase().endsWith(".db")) {
+    const fileName = selectedFile?.name.toLowerCase() ?? "";
+    if (selectedFile && !fileName.endsWith(".db") && !fileName.endsWith(".zip")) {
       setFile(null);
       setResult({
         type: "error",
-        message: "SQLiteファイル（.db）を選択してください",
+        message: "SQLiteファイル（.db）またはフルバックアップ（.zip）を選択してください",
       });
       return;
     }
@@ -111,11 +113,11 @@ export default function SettingsPage() {
           <h2 className="font-bold">バックアップ</h2>
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          データベースファイルをダウンロードして保存できます
+          データベース単体、またはPDF資料込みのフルバックアップを保存できます
         </p>
 
         {stats && (
-          <div className="mt-3 grid grid-cols-3 gap-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-4">
             <div className="rounded-lg bg-gray-50 p-3 text-center">
               <div className="text-lg font-bold text-primary-600">
                 {stats.questionCount}
@@ -134,6 +136,12 @@ export default function SettingsPage() {
               </div>
               <div className="text-xs text-gray-500">ファイルサイズ</div>
             </div>
+            <div className="rounded-lg bg-gray-50 p-3 text-center">
+              <div className="text-lg font-bold text-primary-600">
+                {stats.materialCount}
+              </div>
+              <div className="text-xs text-gray-500">PDF資料</div>
+            </div>
           </div>
         )}
 
@@ -144,6 +152,13 @@ export default function SettingsPage() {
           >
             <Download className="h-4 w-4" />
             DBバックアップ
+          </a>
+          <a
+            href="/api/backup/full"
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+          >
+            <Download className="h-4 w-4" />
+            フルバックアップ
           </a>
           <a
             href="/api/export"
@@ -170,7 +185,7 @@ export default function SettingsPage() {
               <ul className="mt-1 space-y-0.5 text-xs">
                 <li>・復元すると現在のデータが上書きされます</li>
                 <li>・復元前に自動でバックアップが作成されます</li>
-                <li>・SQLiteファイル（.db）のみ対応しています</li>
+                <li>・SQLiteファイル（.db）とフルバックアップ（.zip）に対応しています</li>
               </ul>
             </div>
           </div>
@@ -204,15 +219,15 @@ export default function SettingsPage() {
           >
             <Upload className="h-8 w-8 text-amber-500" />
             <span className="text-sm font-medium text-gray-700">
-              {file ? file.name : "復元するDBファイルをドラッグ＆ドロップ"}
+              {file ? file.name : "復元するバックアップファイルをドラッグ＆ドロップ"}
             </span>
             <span className="text-xs text-gray-500">
-              クリックしてファイルを選択することもできます
+              .db または .zip を選択できます
             </span>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".db"
+              accept=".db,.zip,application/zip"
               className="hidden"
               onChange={(e) => {
                 handleFileSelect(e.target.files?.[0] || null);

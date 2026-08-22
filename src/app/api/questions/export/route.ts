@@ -6,8 +6,9 @@ export async function GET(request: NextRequest) {
 
   const questions = await prisma.question.findMany({
     include: {
-      topic: { select: { name: true } },
+      topic: { select: { name: true, subject: { select: { name: true } } } },
       session: { select: { name: true } },
+      material: { select: { title: true, originalName: true } },
       choices: { orderBy: { displayOrder: "asc" } },
     },
     orderBy: { id: "asc" },
@@ -15,14 +16,15 @@ export async function GET(request: NextRequest) {
 
   if (format === "csv") {
     const header =
-      "topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,year,choice1,choice2,choice3,choice4,choice5,correct";
+      "subject,topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,sourcePdf,sourcePage,year,choiceA,choiceB,choiceC,choiceD,choiceE,correctAnswer";
     const rows = questions.map((q) => {
-      const correctIdx =
-        q.choices.findIndex((c) => c.isCorrect) + 1;
+      const correctIdx = q.choices.findIndex((c) => c.isCorrect);
+      const correctAnswer = ["A", "B", "C", "D", "E"][correctIdx] || "";
       const choiceTexts = Array.from({ length: 5 }, (_, i) =>
         csvEscape(q.choices[i]?.text || "")
       );
       return [
+        csvEscape(q.topic.subject.name),
         csvEscape(q.topic.name),
         csvEscape(q.session?.name || ""),
         csvEscape(q.text),
@@ -30,9 +32,11 @@ export async function GET(request: NextRequest) {
         csvEscape(q.briefExplanation),
         csvEscape(q.detailedExplanation),
         csvEscape(q.sourceReference),
+        csvEscape(q.material?.title || q.material?.originalName || ""),
+        q.sourcePage || "",
         q.year || "",
         ...choiceTexts,
-        correctIdx,
+        correctAnswer,
       ].join(",");
     });
 
@@ -46,6 +50,7 @@ export async function GET(request: NextRequest) {
   }
 
   const data = questions.map((q) => ({
+    subject: q.topic.subject.name,
     topic: q.topic.name,
     session: q.session?.name || null,
     text: q.text,
@@ -53,6 +58,8 @@ export async function GET(request: NextRequest) {
     briefExplanation: q.briefExplanation,
     detailedExplanation: q.detailedExplanation,
     sourceReference: q.sourceReference,
+    sourcePdf: q.material?.title || q.material?.originalName || null,
+    sourcePage: q.sourcePage,
     year: q.year,
     choices: q.choices.map((c) => ({
       text: c.text,

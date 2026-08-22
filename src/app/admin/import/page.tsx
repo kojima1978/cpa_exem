@@ -17,7 +17,7 @@ type ImportResult = {
 };
 
 const IMPORT_MODES = [
-  { value: "file", label: "ファイル" },
+  { value: "file", label: "CSV/JSON" },
   { value: "text", label: "JSON入力" },
   { value: "marubatsu", label: "○×テキスト" },
 ] as const;
@@ -42,29 +42,31 @@ export default function ImportPage() {
 
   const downloadTemplate = () => {
     const header =
-      "topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,year,choice1,choice2,choice3,choice4,choice5,correct";
+      "subject,topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,sourcePdf,sourcePage,year,choiceA,choiceB,choiceC,choiceD,correctAnswer";
     const sample = [
-      '"簿記"',
-      '"企業会計原則"',
-      '"次のうち、棚卸資産の評価方法として認められていないものはどれか。"',
-      "2",
-      '"正解は後入先出法。企業会計基準第9号により廃止された。"',
-      '"企業会計基準第9号「棚卸資産の評価に関する会計基準」により、後入先出法は2010年4月以降適用の事業年度から廃止された。"',
-      '""',
-      "2024",
-      '"先入先出法"',
-      '"移動平均法"',
-      '"後入先出法"',
-      '"総平均法"',
-      "",
-      "3",
+      '"相続税法"',
+      '"相続人と法定相続分"',
+      '"基礎編"',
+      '"相続税の基礎控除額の説明として正しいものはどれか。"',
+      "A",
+      '"基礎控除は相続人数によって変わります。"',
+      '"相続税の基礎控除額は、3,000万円 + 600万円 × 法定相続人の数で計算します。"',
+      '"相続税法15条"',
+      '"相続税法資料.pdf"',
+      "12",
+      "2026",
+      '"3,000万円 + 600万円 × 法定相続人の数"',
+      '"5,000万円 + 1,000万円 × 法定相続人の数"',
+      '"相続財産の10%"',
+      '"常に3,000万円"',
+      "A",
     ].join(",");
     const csv = "﻿" + header + "\n" + sample + "\n";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "cpa-exam-template.csv";
+    a.download = "notebooklm-abcd-template.csv";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -154,7 +156,7 @@ export default function ImportPage() {
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-8 hover:border-primary-400">
               <Upload className="h-8 w-8 text-gray-400" />
               <span className="text-sm text-gray-500">
-                {file ? file.name : "JSON または CSV ファイルを選択"}
+                {file ? file.name : "NotebookLMのCSV または JSON ファイルを選択"}
               </span>
               <input
                 type="file"
@@ -180,7 +182,7 @@ export default function ImportPage() {
               value={jsonText}
               onChange={(e) => setJsonText(e.target.value)}
               className="w-full rounded-lg border px-3 py-2 font-mono text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
-              placeholder={`[\n  {\n    "topic": "簿記",\n    "text": "問題文...",\n    "choices": [\n      { "text": "選択肢1", "isCorrect": false },\n      { "text": "選択肢2", "isCorrect": true }\n    ]\n  }\n]`}
+              placeholder={`[\n  {\n    "subject": "相続税法",\n    "topic": "相続人と法定相続分",\n    "session": "基礎編",\n    "text": "問題文...",\n    "sourcePdf": "相続税法資料.pdf",\n    "sourcePage": 12,\n    "choices": [\n      { "text": "Aの内容", "isCorrect": true },\n      { "text": "Bの内容", "isCorrect": false },\n      { "text": "Cの内容", "isCorrect": false },\n      { "text": "Dの内容", "isCorrect": false }\n    ]\n  }\n]`}
             />
             <button
               onClick={handleTextImport}
@@ -307,15 +309,18 @@ export default function ImportPage() {
         <div className="mt-4 border-t pt-4">
           <h3 className="text-sm font-medium text-gray-700">CSV列の説明</h3>
           <code className="mt-2 block overflow-x-auto rounded bg-gray-100 p-3 text-xs">
-            topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,year,choice1,choice2,choice3,choice4,choice5,correct
+            subject,topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,sourcePdf,sourcePage,year,choiceA,choiceB,choiceC,choiceD,correctAnswer
           </code>
           <ul className="mt-2 space-y-0.5 text-xs text-gray-500">
+            <li><strong>subject</strong>: 科目名（例: 相続税法。未登録の場合は自動作成）</li>
             <li><strong>topic</strong>: 分野名（未登録の場合は自動作成）</li>
             <li><strong>session</strong>: 学習単位名（省略可、未登録の場合は自動作成）</li>
-            <li><strong>difficulty</strong>: 出題頻度 1=出題高(A), 2=普通(B), 3=出題低(C)</li>
+            <li><strong>difficulty</strong>: 出題頻度 A/1=出題高, B/2=普通, C/3=出題低</li>
             <li><strong>sourceReference</strong>: 根拠条文（省略可）</li>
-            <li><strong>choice1〜5</strong>: 選択肢（最低2つ必須、5まで使用可）</li>
-            <li><strong>correct</strong>: 正解の選択肢番号（1〜5）</li>
+            <li><strong>sourcePdf</strong>: 資料PDF名（資料PDFに登録した名前と一致すると自動紐づけ）</li>
+            <li><strong>sourcePage</strong>: 参照ページ番号（省略可）</li>
+            <li><strong>choiceA〜D</strong>: 四択の選択肢</li>
+            <li><strong>correctAnswer</strong>: 正解（A/B/C/D）</li>
           </ul>
         </div>
       </div>

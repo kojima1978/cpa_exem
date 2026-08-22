@@ -25,6 +25,17 @@ export async function GET(request: NextRequest) {
       include: {
         topic: { select: { id: true, name: true } },
         session: { select: { id: true, name: true } },
+        material: {
+          select: {
+            id: true,
+            title: true,
+            originalName: true,
+            fileName: true,
+            mimeType: true,
+            size: true,
+            createdAt: true,
+          },
+        },
         choices: { orderBy: { displayOrder: "asc" } },
       },
       orderBy: { createdAt: "desc" },
@@ -47,10 +58,13 @@ export async function POST(request: NextRequest) {
     data: {
       topicId: body.topicId,
       sessionId: body.sessionId || null,
+      materialId: body.materialId || null,
       text: body.text,
       difficulty: body.difficulty ?? 1,
       briefExplanation: body.briefExplanation ?? "",
       detailedExplanation: body.detailedExplanation ?? "",
+      sourceReference: body.sourceReference ?? "",
+      sourcePage: body.sourcePage || null,
       year: body.year || null,
       choices: {
         create: body.choices.map(
@@ -65,6 +79,17 @@ export async function POST(request: NextRequest) {
     include: {
       topic: { select: { id: true, name: true } },
       session: { select: { id: true, name: true } },
+      material: {
+        select: {
+          id: true,
+          title: true,
+          originalName: true,
+          fileName: true,
+          mimeType: true,
+          size: true,
+          createdAt: true,
+        },
+      },
       choices: { orderBy: { displayOrder: "asc" } },
     },
   });

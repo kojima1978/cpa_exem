@@ -42,19 +42,33 @@ model Question {
   id                  Int             @id @default(autoincrement())
   topicId             Int
   sessionId           Int?
+  materialId          Int?
   text                String
   difficulty          Int             @default(1)
   briefExplanation    String          @default("")
   detailedExplanation String          @default("")
   sourceReference     String          @default("")
+  sourcePage          Int?
   year                Int?
   nextReviewAt        DateTime?
   createdAt           DateTime        @default(now())
   topic               Topic           @relation(fields: [topicId], references: [id])
   session             Session?        @relation(fields: [sessionId], references: [id])
+  material            Material?       @relation(fields: [materialId], references: [id], onDelete: SetNull)
   choices             Choice[]
   answerHistories     AnswerHistory[]
   bookmarks           Bookmark[]
+}
+
+model Material {
+  id           Int        @id @default(autoincrement())
+  title        String
+  originalName String
+  fileName     String     @unique
+  mimeType     String     @default("application/pdf")
+  size         Int        @default(0)
+  createdAt    DateTime   @default(now())
+  questions    Question[]
 }
 
 model Choice {

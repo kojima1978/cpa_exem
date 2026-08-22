@@ -8,13 +8,24 @@ import { PracticeResults } from "@/components/PracticeResults";
 
 export type PracticeQuestion = {
   id: number;
+  materialId: number | null;
   text: string;
   difficulty: number;
   briefExplanation: string;
   detailedExplanation: string;
   sourceReference: string;
+  sourcePage: number | null;
   topic: { id: number; name: string };
   session: { id: number; name: string } | null;
+  material: {
+    id: number;
+    title: string;
+    originalName: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+    createdAt: string;
+  } | null;
   choices: { id: number; text: string; isCorrect: boolean; displayOrder: number }[];
   bookmarks: { id: number }[];
   answerHistories: { isCorrect: boolean }[];
