@@ -1,5 +1,5 @@
 import { readFile } from "fs/promises";
-import { basename, join } from "path";
+import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getMaterialsDir } from "@/lib/storage-path";
@@ -28,7 +28,6 @@ export async function GET(_request: NextRequest, { params }: Params) {
     );
   }
 
-  const safeName = basename(material.originalName).replace(/"/g, "");
   const body = buffer.buffer.slice(
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength,
@@ -38,7 +37,6 @@ export async function GET(_request: NextRequest, { params }: Params) {
   return new Response(blob, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${safeName}"`,
       "Content-Length": String(buffer.byteLength),
       "Cache-Control": "private, max-age=300",
     },
