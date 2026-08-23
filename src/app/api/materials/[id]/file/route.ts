@@ -33,8 +33,9 @@ export async function GET(_request: NextRequest, { params }: Params) {
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength,
   ) as ArrayBuffer;
+  const blob = new Blob([body], { type: "application/pdf" });
 
-  return new NextResponse(body, {
+  return new Response(blob, {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="${safeName}"`,
