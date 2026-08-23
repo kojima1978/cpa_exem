@@ -18,21 +18,28 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  let buffer: Buffer;
   try {
-    const buffer = await readFile(join(getMaterialsDir(), material.fileName));
-    const safeName = basename(material.originalName).replace(/"/g, "");
-
-    return new NextResponse(buffer, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${safeName}"`,
-        "Cache-Control": "private, max-age=300",
-      },
-    });
+    buffer = await readFile(join(getMaterialsDir(), material.fileName));
   } catch {
     return NextResponse.json(
       { error: "PDFファイルが見つかりません" },
       { status: 404 },
     );
   }
+
+  const safeName = basename(material.originalName).replace(/"/g, "");
+  const body = buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  ) as ArrayBuffer;
+
+  return new NextResponse(body, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${safeName}"`,
+      "Content-Length": String(buffer.byteLength),
+      "Cache-Control": "private, max-age=300",
+    },
+  });
 }
