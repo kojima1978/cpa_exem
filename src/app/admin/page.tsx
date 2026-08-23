@@ -2,54 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import {
-  FileText,
-  Upload,
-  FolderTree,
-  BookMarked,
-  Settings,
-  Library,
-  BarChart3,
-} from "lucide-react";
-
-const CARDS = [
-  {
-    href: "/admin/questions",
-    label: "問題一覧",
-    desc: "登録済みの問題を閲覧・編集",
-    icon: FileText,
-  },
-  {
-    href: "/admin/import",
-    label: "インポート",
-    desc: "JSON/CSVで問題を一括登録",
-    icon: Upload,
-  },
-  {
-    href: "/admin/subjects",
-    label: "科目管理",
-    desc: "財務会計論・会社法など科目の追加・編集",
-    icon: Library,
-  },
-  {
-    href: "/admin/topics",
-    label: "分野管理",
-    desc: "問題の分野を追加・編集",
-    icon: FolderTree,
-  },
-  {
-    href: "/admin/sessions",
-    label: "学習単位管理",
-    desc: "基準・単元の追加・編集",
-    icon: BookMarked,
-  },
-  {
-    href: "/admin/settings",
-    label: "設定",
-    desc: "バックアップ・復元",
-    icon: Settings,
-  },
-];
+import { BarChart3 } from "lucide-react";
+import { ADMIN_NAV_ITEMS } from "@/lib/admin-nav";
 
 type SubjectStat = {
   id: number;
@@ -135,7 +89,7 @@ export default function AdminPage() {
 
       {/* Navigation cards */}
       <div className="grid gap-4 sm:grid-cols-2">
-        {CARDS.map(({ href, label, desc, icon: Icon }) => (
+        {ADMIN_NAV_ITEMS.map(({ href, label, desc, icon: Icon }) => (
           <Link
             key={href}
             href={href}

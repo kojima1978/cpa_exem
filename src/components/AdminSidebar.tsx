@@ -2,32 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  FileText,
-  Upload,
-  FolderTree,
-  BookMarked,
-  Settings,
-  Files,
-} from "lucide-react";
-
-const ADMIN_LINKS = [
-  { href: "/admin/questions", label: "問題一覧", icon: FileText },
-  { href: "/admin/questions/new", label: "問題作成", icon: FileText },
-  { href: "/admin/import", label: "インポート", icon: Upload },
-  { href: "/admin/materials", label: "資料PDF", icon: Files },
-  { href: "/admin/topics", label: "分野管理", icon: FolderTree },
-  { href: "/admin/sessions", label: "学習単位管理", icon: BookMarked },
-  { href: "/admin/settings", label: "設定", icon: Settings },
-];
+import { ADMIN_NAV_ITEMS } from "@/lib/admin-nav";
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const activeHref = ADMIN_NAV_ITEMS.reduce<string | null>((matched, item) => {
+    const isMatch = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    if (!isMatch) return matched;
+    return !matched || item.href.length > matched.length ? item.href : matched;
+  }, null);
 
   return (
     <nav className="space-y-1">
-      {ADMIN_LINKS.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href;
+      {ADMIN_NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        const active = activeHref === href;
         return (
           <Link
             key={href}
