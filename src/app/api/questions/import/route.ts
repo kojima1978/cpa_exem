@@ -10,7 +10,15 @@ export async function POST(request: NextRequest) {
     const text = await request.text();
     items = parseCSV(text);
   } else {
-    items = await request.json();
+    const text = await request.text();
+    try {
+      items = normalizeImportQuestions(parseJsonImportText(text));
+    } catch {
+      return NextResponse.json(
+        { error: "JSON形式を読み取れませんでした" },
+        { status: 400 }
+      );
+    }
   }
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -23,9 +31,10 @@ export async function POST(request: NextRequest) {
   const subjects = await prisma.subject.findMany();
   const subjectCache = new Map(subjects.map((s) => [s.name, s.id]));
   const defaultSubjectId = subjects[0]?.id;
-  if (!defaultSubjectId) {
+  const hasItemWithoutSubject = items.some((item) => !item.subject?.trim());
+  if (!defaultSubjectId && hasItemWithoutSubject) {
     return NextResponse.json(
-      { error: "科目が存在しません。先にシードデータを作成してください" },
+      { error: "科目が存在しません。JSONにsubjectを指定してください" },
       { status: 400 }
     );
   }
@@ -55,7 +64,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      let subjectId = defaultSubjectId;
+      let subjectId = defaultSubjectId ?? 0;
       if (item.subject?.trim()) {
         const subjectName = item.subject.trim();
         const cachedSubjectId = subjectCache.get(subjectName);
@@ -68,6 +77,10 @@ export async function POST(request: NextRequest) {
           subjectCache.set(subjectName, newSubject.id);
           subjectId = newSubject.id;
         }
+      }
+      if (!subjectId) {
+        errors.push(`#${i + 1}: 科目がありません`);
+        continue;
       }
 
       let topicId: number;
@@ -174,6 +187,108 @@ function parseCSV(text: string): ImportQuestion[] {
   }
 
   return questions;
+}
+
+function parseJsonImportText(text: string): unknown {
+  const trimmed = text.trim().replace(/^\uFEFF/, "");
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = fenced?.[1]?.trim() || trimmed;
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    const start = body.indexOf("[");
+    const end = body.lastIndexOf("]");
+    if (start >= 0 && end > start) {
+      return JSON.parse(body.slice(start, end + 1));
+    }
+    throw new Error("Invalid JSON");
+  }
+}
+
+function normalizeImportQuestions(value: unknown): ImportQuestion[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => normalizeImportQuestion(item))
+    .filter((item): item is ImportQuestion => item !== null);
+}
+
+function normalizeImportQuestion(value: unknown): ImportQuestion | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const text = asString(row.text) || asString(row.question);
+  const answer = row.answer ?? row.correctAnswer ?? row.correct;
+  const choices = normalizeJsonChoices(row.choices ?? row.options, answer);
+  if (!text || choices.length === 0) return null;
+
+  return {
+    subject: asString(row.subject) || undefined,
+    topic: asString(row.topic) || "未分類",
+    session: asString(row.session) || undefined,
+    text,
+    difficulty: parseImportDifficulty(row.difficulty),
+    briefExplanation:
+      asString(row.briefExplanation) || asString(row.explanation) || "",
+    detailedExplanation:
+      asString(row.detailedExplanation) || asString(row.explanation) || "",
+    sourceReference: asString(row.sourceReference) || "",
+    sourcePdf: asString(row.sourcePdf) || undefined,
+    sourcePage: Number(row.sourcePage) || undefined,
+    year: Number(row.year) || undefined,
+    choices,
+  };
+}
+
+function normalizeJsonChoices(value: unknown, answer: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((choice, index) => {
+      const text =
+        typeof choice === "string"
+          ? choice
+          : choice && typeof choice === "object"
+            ? asString((choice as Record<string, unknown>).text) ||
+              asString((choice as Record<string, unknown>).label)
+            : "";
+      if (!text) return null;
+
+      const explicitCorrect =
+        choice &&
+        typeof choice === "object" &&
+        (choice as Record<string, unknown>).isCorrect === true;
+
+      return {
+        text,
+        isCorrect: explicitCorrect || matchesAnswer(answer, text, index),
+      };
+    })
+    .filter(
+      (choice): choice is { text: string; isCorrect: boolean } =>
+        choice !== null,
+    );
+}
+
+function matchesAnswer(answer: unknown, choiceText: string, index: number) {
+  if (answer == null || answer === "") return false;
+  const letters = ["A", "B", "C", "D", "E"];
+  if (typeof answer === "number") return answer === index + 1;
+
+  const normalizedAnswer = String(answer).trim().toUpperCase();
+  const numericAnswer = Number(normalizedAnswer);
+  if (Number.isInteger(numericAnswer)) return numericAnswer === index + 1;
+
+  const letterIndex = letters.indexOf(normalizedAnswer);
+  if (letterIndex >= 0) return letterIndex === index;
+  if (/^[A-E][).．、:\s]/.test(normalizedAnswer)) {
+    return letters[index] === normalizedAnswer[0];
+  }
+
+  const normalizedChoice = choiceText.trim().toUpperCase();
+  return normalizedAnswer === normalizedChoice;
+}
+
+function asString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function parseChoices(row: Record<string, string>) {

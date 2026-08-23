@@ -2,11 +2,15 @@
 
 import { useState, useEffect } from "react";
 import {
-  Upload,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  FileDown,
   FileJson,
   FileSpreadsheet,
-  FileDown,
   FileText,
+  Upload,
 } from "lucide-react";
 import type { TopicData } from "@/types";
 
@@ -16,13 +20,65 @@ type ImportResult = {
   total: number;
 };
 
-const IMPORT_MODES = [
-  { value: "file", label: "CSV/JSON" },
-  { value: "text", label: "JSON入力" },
-  { value: "marubatsu", label: "○×テキスト" },
-] as const;
+const AI_IMPORT_PROMPT = `ソース資料を基に、ABCDの四択問題を作成してください。
 
-type ImportMode = (typeof IMPORT_MODES)[number]["value"];
+出力はJSON形式の配列のみとし、必ずコードブロック内に出力してください。
+説明文や前置きは不要です。
+
+各問題は次の形式にしてください。
+
+[
+  {
+    "subject": "相続税法",
+    "topic": "分野名",
+    "session": "章・学習単位名",
+    "text": "問題文",
+    "difficulty": 1,
+    "briefExplanation": "正解の理由を1〜2文で簡潔に説明",
+    "detailedExplanation": "根拠や注意点を含めて詳しく説明",
+    "sourceReference": "根拠条文・資料名など",
+    "sourcePdf": "アップロード済みPDFファイル名",
+    "sourcePage": 12,
+    "year": 2026,
+    "choices": [
+      { "text": "A. 選択肢A", "isCorrect": true },
+      { "text": "B. 選択肢B", "isCorrect": false },
+      { "text": "C. 選択肢C", "isCorrect": false },
+      { "text": "D. 選択肢D", "isCorrect": false }
+    ]
+  }
+]
+
+条件:
+- choicesは必ず4つにしてください。
+- 正解は1つだけにしてください。
+- isCorrectがtrueの選択肢を1つだけ設定してください。
+- difficultyは 1=重要度A、2=重要度B、3=重要度C としてください。
+- sourcePageには、根拠となるPDFページ番号を入れてください。
+- sourcePdfには、管理画面に登録するPDFファイル名と同じ名前を入れてください。
+- 問題文、選択肢、解説はソース資料の内容に基づいて作成してください。`;
+
+const JSON_PLACEHOLDER = `[
+  {
+    "subject": "相続税法",
+    "topic": "相続人と法定相続分",
+    "session": "基礎編",
+    "text": "問題文...",
+    "difficulty": 1,
+    "briefExplanation": "簡易解説...",
+    "detailedExplanation": "詳細解説...",
+    "sourceReference": "相続税法15条",
+    "sourcePdf": "相続税法資料.pdf",
+    "sourcePage": 12,
+    "year": 2026,
+    "choices": [
+      { "text": "Aの内容", "isCorrect": true },
+      { "text": "Bの内容", "isCorrect": false },
+      { "text": "Cの内容", "isCorrect": false },
+      { "text": "Dの内容", "isCorrect": false }
+    ]
+  }
+]`;
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -32,7 +88,8 @@ export default function ImportPage() {
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
-  const [mode, setMode] = useState<ImportMode>("marubatsu");
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [legacyOpen, setLegacyOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/topics")
@@ -71,42 +128,51 @@ export default function ImportPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleFileImport = async () => {
-    if (!file) return;
+  const copyPrompt = async () => {
+    await navigator.clipboard.writeText(AI_IMPORT_PROMPT);
+    setPromptCopied(true);
+    window.setTimeout(() => setPromptCopied(false), 1800);
+  };
+
+  const submitImport = async (body: string, contentType: string) => {
     setImporting(true);
     setResult(null);
-    const isCSV = file.name.endsWith(".csv");
-    const body = await file.text();
-    const res = await fetch("/api/questions/import", {
-      method: "POST",
-      headers: { "Content-Type": isCSV ? "text/csv" : "application/json" },
-      body,
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      setResult({ imported: 0, errors: [data.error || "インポートに失敗しました"], total: 0 });
-    } else {
-      setResult(data);
+    try {
+      const res = await fetch("/api/questions/import", {
+        method: "POST",
+        headers: { "Content-Type": contentType },
+        body,
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setResult({
+          imported: 0,
+          errors: [data.error || "インポートに失敗しました"],
+          total: 0,
+        });
+      } else {
+        setResult(data);
+      }
+    } catch {
+      setResult({
+        imported: 0,
+        errors: ["インポート中にエラーが発生しました"],
+        total: 0,
+      });
+    } finally {
+      setImporting(false);
     }
-    setImporting(false);
+  };
+
+  const handleFileImport = async () => {
+    if (!file) return;
+    const isCSV = file.name.toLowerCase().endsWith(".csv");
+    await submitImport(await file.text(), isCSV ? "text/csv" : "application/json");
   };
 
   const handleTextImport = async () => {
     if (!jsonText.trim()) return;
-    setImporting(true);
-    setResult(null);
-    const res = await fetch("/api/questions/import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonText,
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      setResult({ imported: 0, errors: [data.error || "インポートに失敗しました"], total: 0 });
-    } else {
-      setResult(data);
-    }
-    setImporting(false);
+    await submitImport(jsonText, "application/json");
   };
 
   const handleMaruBatsuImport = async () => {
@@ -120,7 +186,11 @@ export default function ImportPage() {
     });
     const data = await res.json();
     if (!res.ok || data.error) {
-      setResult({ imported: 0, errors: [data.error || "インポートに失敗しました"], total: 0 });
+      setResult({
+        imported: 0,
+        errors: [data.error || "インポートに失敗しました"],
+        total: 0,
+      });
     } else {
       setResult(data);
     }
@@ -131,32 +201,64 @@ export default function ImportPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-bold">インポート / エクスポート</h1>
 
-      {/* Import section */}
       <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <h2 className="font-bold">インポート</h2>
-
-        <div className="mt-3 flex gap-2">
-          {IMPORT_MODES.map((m) => (
-            <button
-              key={m.value}
-              onClick={() => { setMode(m.value); setResult(null); }}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                mode === m.value
-                  ? "bg-primary-500 text-white"
-                  : "border text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold">AI生成プロンプト</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              NotebookLMに貼り付けて、アプリ用JSONを作成します。
+            </p>
+          </div>
+          <button
+            onClick={copyPrompt}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+          >
+            {promptCopied ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            {promptCopied ? "コピー済み" : "プロンプトをコピー"}
+          </button>
         </div>
 
-        {mode === "file" && (
-          <div className="mt-4">
-            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-8 hover:border-primary-400">
+        <textarea
+          readOnly
+          value={AI_IMPORT_PROMPT}
+          rows={14}
+          className="mt-4 w-full rounded-lg border bg-gray-50 px-3 py-2 font-mono text-xs leading-relaxed text-gray-700"
+        />
+      </div>
+
+      <div className="rounded-xl border bg-white p-5 shadow-sm">
+        <h2 className="font-bold">問題を取り込む</h2>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              AI出力JSON
+            </label>
+            <textarea
+              rows={18}
+              value={jsonText}
+              onChange={(e) => setJsonText(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 font-mono text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              placeholder={JSON_PLACEHOLDER}
+            />
+            <button
+              onClick={handleTextImport}
+              disabled={!jsonText.trim() || importing}
+              className="mt-3 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+            >
+              {importing ? "インポート中..." : "JSONをインポート"}
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center hover:border-primary-400">
               <Upload className="h-8 w-8 text-gray-400" />
               <span className="text-sm text-gray-500">
-                {file ? file.name : "NotebookLMのCSV または JSON ファイルを選択"}
+                {file ? file.name : "JSON / CSV ファイルを選択"}
               </span>
               <input
                 type="file"
@@ -168,88 +270,19 @@ export default function ImportPage() {
             <button
               onClick={handleFileImport}
               disabled={!file || importing}
-              className="mt-3 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+              className="w-full rounded-lg border border-primary-500 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50 disabled:opacity-50"
             >
-              {importing ? "インポート中..." : "インポート実行"}
+              {importing ? "インポート中..." : "ファイルをインポート"}
             </button>
-          </div>
-        )}
-
-        {mode === "text" && (
-          <div className="mt-4">
-            <textarea
-              rows={12}
-              value={jsonText}
-              onChange={(e) => setJsonText(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 font-mono text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
-              placeholder={`[\n  {\n    "subject": "相続税法",\n    "topic": "相続人と法定相続分",\n    "session": "基礎編",\n    "text": "問題文...",\n    "sourcePdf": "相続税法資料.pdf",\n    "sourcePage": 12,\n    "choices": [\n      { "text": "Aの内容", "isCorrect": true },\n      { "text": "Bの内容", "isCorrect": false },\n      { "text": "Cの内容", "isCorrect": false },\n      { "text": "Dの内容", "isCorrect": false }\n    ]\n  }\n]`}
-            />
             <button
-              onClick={handleTextImport}
-              disabled={!jsonText.trim() || importing}
-              className="mt-3 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+              onClick={downloadTemplate}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
-              {importing ? "インポート中..." : "インポート実行"}
+              <FileDown className="h-4 w-4" />
+              CSVテンプレート
             </button>
           </div>
-        )}
-
-        {mode === "marubatsu" && (
-          <div className="mt-4 space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                分野（章）
-              </label>
-              <select
-                value={mbTopicId}
-                onChange={(e) => setMbTopicId(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              >
-                <option value="">選択してください</option>
-                {topics.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                問題＋解答テキスト
-              </label>
-              <textarea
-                rows={16}
-                value={mbText}
-                onChange={(e) => setMbText(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
-                placeholder={`1.財務会計の機能\nロロロ 問題1 重要度A H22過去問\n金融商品取引法は…\n\nロロロ 問題1 正しい\n解説文…`}
-              />
-            </div>
-            <button
-              onClick={handleMaruBatsuImport}
-              disabled={!mbText.trim() || !mbTopicId || importing}
-              className="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
-            >
-              <FileText className="h-4 w-4" />
-              {importing ? "インポート中..." : "○×問題をインポート"}
-            </button>
-
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-medium text-amber-800">テキスト形式</p>
-              <pre className="mt-1 whitespace-pre-wrap text-xs text-amber-700">{`[セクション] 1.財務会計の機能
-[問題] ロロロ 問題1 重要度A H22過去問
-       問題文（複数行可）
-[解答] ロロロ 問題1 正しい
-       解説文（複数行可）
-[補足] 追加でチェック！
-       補足説明文`}</pre>
-              <ul className="mt-2 space-y-0.5 text-xs text-amber-600">
-                <li>• セクション → 学習単位として自動登録</li>
-                <li>• 出題頻度A/B/C → 出題高/普通/出題低</li>
-                <li>• H22→2010, R4→2022（年度自動変換）</li>
-                <li>• 選択肢は「正しい」「誤り」の2択で自動作成</li>
-              </ul>
-            </div>
-          </div>
-        )}
+        </div>
 
         {result && (
           <div className="mt-4 rounded-lg border bg-gray-50 p-4">
@@ -270,7 +303,65 @@ export default function ImportPage() {
         )}
       </div>
 
-      {/* Export section */}
+      <div className="rounded-xl border bg-white p-5 shadow-sm">
+        <button
+          onClick={() => setLegacyOpen((v) => !v)}
+          className="flex w-full items-center justify-between text-left"
+        >
+          <span className="flex items-center gap-2 font-bold">
+            <FileText className="h-5 w-5 text-gray-400" />
+            ○×テキストを取り込む
+          </span>
+          {legacyOpen ? (
+            <ChevronUp className="h-4 w-4 text-gray-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-gray-400" />
+          )}
+        </button>
+
+        {legacyOpen && (
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                分野（章）
+              </label>
+              <select
+                value={mbTopicId}
+                onChange={(e) => setMbTopicId(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="">選択してください</option>
+                {topics.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                問題＋解答テキスト
+              </label>
+              <textarea
+                rows={12}
+                value={mbText}
+                onChange={(e) => setMbText(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder={`1.財務会計の機能\nロロロ 問題1 重要度A H22過去問\n金融商品取引法は…\n\nロロロ 問題1 正しい\n解説文…`}
+              />
+            </div>
+            <button
+              onClick={handleMaruBatsuImport}
+              disabled={!mbText.trim() || !mbTopicId || importing}
+              className="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+            >
+              <FileText className="h-4 w-4" />
+              {importing ? "インポート中..." : "○×問題をインポート"}
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="rounded-xl border bg-white p-5 shadow-sm">
         <h2 className="font-bold">エクスポート</h2>
         <p className="mt-1 text-sm text-gray-500">登録済みの問題をダウンロード</p>
@@ -289,39 +380,6 @@ export default function ImportPage() {
             <FileSpreadsheet className="h-4 w-4" />
             CSV
           </a>
-        </div>
-      </div>
-
-      {/* CSV Template section */}
-      <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <h2 className="font-bold">CSVテンプレート</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          サンプル行付きのテンプレートをダウンロードして、そのまま編集・インポートできます。
-        </p>
-        <button
-          onClick={downloadTemplate}
-          className="mt-3 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-        >
-          <FileDown className="h-4 w-4" />
-          CSVテンプレートをダウンロード
-        </button>
-
-        <div className="mt-4 border-t pt-4">
-          <h3 className="text-sm font-medium text-gray-700">CSV列の説明</h3>
-          <code className="mt-2 block overflow-x-auto rounded bg-gray-100 p-3 text-xs">
-            subject,topic,session,text,difficulty,briefExplanation,detailedExplanation,sourceReference,sourcePdf,sourcePage,year,choiceA,choiceB,choiceC,choiceD,correctAnswer
-          </code>
-          <ul className="mt-2 space-y-0.5 text-xs text-gray-500">
-            <li><strong>subject</strong>: 科目名（例: 相続税法。未登録の場合は自動作成）</li>
-            <li><strong>topic</strong>: 分野名（未登録の場合は自動作成）</li>
-            <li><strong>session</strong>: 学習単位名（省略可、未登録の場合は自動作成）</li>
-            <li><strong>difficulty</strong>: 出題頻度 A/1=出題高, B/2=普通, C/3=出題低</li>
-            <li><strong>sourceReference</strong>: 根拠条文（省略可）</li>
-            <li><strong>sourcePdf</strong>: 資料PDF名（資料PDFに登録した名前と一致すると自動紐づけ）</li>
-            <li><strong>sourcePage</strong>: 参照ページ番号（省略可）</li>
-            <li><strong>choiceA〜D</strong>: 四択の選択肢</li>
-            <li><strong>correctAnswer</strong>: 正解（A/B/C/D）</li>
-          </ul>
         </div>
       </div>
     </div>
