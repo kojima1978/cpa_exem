@@ -55,6 +55,7 @@ export type MaterialData = {
   mimeType: string;
   size: number;
   createdAt: string;
+  fileExists?: boolean;
   _count?: { questions: number };
 };
 

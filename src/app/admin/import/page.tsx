@@ -13,6 +13,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { getFileDisplayPath, PdfDropZone } from "@/components/PdfDropZone";
 import type { TopicData } from "@/types";
 
 type ImportResult = {
@@ -140,6 +141,10 @@ export default function ImportPage() {
   };
 
   const handlePdfSelect = (selectedFile: File | null) => {
+    if (pdfInputRef.current) {
+      pdfInputRef.current.value = "";
+    }
+
     if (!selectedFile) {
       setPdfFile(null);
       return;
@@ -342,19 +347,16 @@ export default function ImportPage() {
                   </button>
                 )}
               </div>
-              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-white p-6 text-center hover:border-primary-400">
-                <FileText className="h-7 w-7 text-gray-400" />
-                <span className="text-sm text-gray-500">
-                  {pdfFile ? pdfFile.name : "PDFファイルを選択"}
-                </span>
-                <input
-                  ref={pdfInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  className="hidden"
-                  onChange={(e) => handlePdfSelect(e.target.files?.[0] || null)}
-                />
-              </label>
+              <PdfDropZone
+                file={pdfFile}
+                inputRef={pdfInputRef}
+                onSelect={handlePdfSelect}
+                placeholder="PDFをドラッグ＆ドロップ"
+                helperText="クリックしてPDFを選択することもできます"
+                iconClassName="h-7 w-7 text-gray-400"
+                paddingClassName="p-6"
+                className="bg-white"
+              />
               <input
                 type="text"
                 value={pdfTitle}
@@ -362,6 +364,11 @@ export default function ImportPage() {
                 className="mt-2 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="PDF資料名"
               />
+              {pdfFile && (
+                <p className="mt-2 text-xs text-gray-500">
+                  取得パス: {getFileDisplayPath(pdfFile)}
+                </p>
+              )}
             </div>
 
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center hover:border-primary-400">

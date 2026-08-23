@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
+import { access, mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +12,16 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { questions: true } } },
   });
-  return NextResponse.json(materials);
+  const materialsDir = getMaterialsDir();
+  const result = await Promise.all(
+    materials.map(async (material) => {
+      const fileExists = await access(join(materialsDir, material.fileName))
+        .then(() => true)
+        .catch(() => false);
+      return { ...material, fileExists };
+    }),
+  );
+  return NextResponse.json(result);
 }
 
 export async function POST(request: NextRequest) {
