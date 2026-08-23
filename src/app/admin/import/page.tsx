@@ -93,14 +93,25 @@ export default function ImportPage() {
   const [topics, setTopics] = useState<TopicData[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
-  const [promptCopied, setPromptCopied] = useState(false);
+  const [promptCopyStatus, setPromptCopyStatus] = useState<
+    "success" | "error" | null
+  >(null);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const promptCopyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     fetch("/api/topics")
       .then((r) => r.json())
       .then(setTopics);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (promptCopyTimerRef.current) {
+        window.clearTimeout(promptCopyTimerRef.current);
+      }
+    };
   }, []);
 
   const downloadTemplate = () => {
@@ -135,9 +146,21 @@ export default function ImportPage() {
   };
 
   const copyPrompt = async () => {
-    await navigator.clipboard.writeText(AI_IMPORT_PROMPT);
-    setPromptCopied(true);
-    window.setTimeout(() => setPromptCopied(false), 1800);
+    if (promptCopyTimerRef.current) {
+      window.clearTimeout(promptCopyTimerRef.current);
+    }
+
+    try {
+      await navigator.clipboard.writeText(AI_IMPORT_PROMPT);
+      setPromptCopyStatus("success");
+    } catch {
+      setPromptCopyStatus("error");
+    }
+
+    promptCopyTimerRef.current = window.setTimeout(
+      () => setPromptCopyStatus(null),
+      6000,
+    );
   };
 
   const handlePdfSelect = (selectedFile: File | null) => {
@@ -214,12 +237,14 @@ export default function ImportPage() {
           errors: [data.error || "インポートに失敗しました"],
           total: 0,
         });
+        return false;
       } else {
         setResult({ ...data, materialTitle: material?.title });
         if (material) {
           setPdfFile(null);
           setPdfTitle("");
         }
+        return data.imported === data.total && data.errors.length === 0;
       }
     } catch (error) {
       setResult({
@@ -229,8 +254,9 @@ export default function ImportPage() {
             ? error.message
             : "インポート中にエラーが発生しました",
         ],
-        total: 0,
+          total: 0,
       });
+      return false;
     } finally {
       setImporting(false);
     }
@@ -246,8 +272,17 @@ export default function ImportPage() {
   };
 
   const handleTextImport = async () => {
-    if (!jsonText.trim()) return;
-    await submitImport(jsonText, "application/json");
+    if (!jsonText.trim() || importing) return;
+
+    const confirmed = window.confirm(
+      "貼り付けたJSONをインポートしますか？\n全件成功後、二重取込み防止のため入力欄を空にします。",
+    );
+    if (!confirmed) return;
+
+    const succeeded = await submitImport(jsonText, "application/json");
+    if (succeeded) {
+      setJsonText("");
+    }
   };
 
   const handleMaruBatsuImport = async () => {
@@ -284,17 +319,41 @@ export default function ImportPage() {
               NotebookLMに貼り付けて、アプリ用JSONを作成します。
             </p>
           </div>
-          <button
-            onClick={copyPrompt}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
-          >
-            {promptCopied ? (
-              <Check className="h-4 w-4" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-            {promptCopied ? "コピー済み" : "プロンプトをコピー"}
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={copyPrompt}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${
+                promptCopyStatus === "success"
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-primary-500 hover:bg-primary-600"
+              }`}
+            >
+              {promptCopyStatus === "success" ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              {promptCopyStatus === "success"
+                ? "コピーしました"
+                : "プロンプトをコピー"}
+            </button>
+            <div aria-live="polite" aria-atomic="true" className="min-h-5">
+              {promptCopyStatus === "success" ? (
+                <p
+                  role="status"
+                  className="flex items-center gap-1 text-sm font-medium text-green-700"
+                >
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  プロンプトをクリップボードにコピーしました
+                </p>
+              ) : promptCopyStatus === "error" ? (
+                <p role="alert" className="text-sm font-medium text-red-600">
+                  コピーできませんでした。もう一度お試しください
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <textarea
