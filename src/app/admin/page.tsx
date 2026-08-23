@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { BarChart3 } from "lucide-react";
-import { ADMIN_NAV_ITEMS } from "@/lib/admin-nav";
 
 type SubjectStat = {
   id: number;
@@ -86,25 +84,6 @@ export default function AdminPage() {
           </div>
         </section>
       )}
-
-      {/* Navigation cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {ADMIN_NAV_ITEMS.map(({ href, label, desc, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="flex items-start gap-4 rounded-xl border bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-500">
-              <Icon className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="font-bold">{label}</div>
-              <div className="mt-0.5 text-sm text-gray-500">{desc}</div>
-            </div>
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }
