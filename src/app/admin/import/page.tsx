@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Check,
   ChevronDown,
@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   FileText,
   Upload,
+  X,
 } from "lucide-react";
 import type { TopicData } from "@/types";
 
@@ -18,6 +19,7 @@ type ImportResult = {
   imported: number;
   errors: string[];
   total: number;
+  materialTitle?: string;
 };
 
 const AI_IMPORT_PROMPT = `ソース資料を基に、ABCDの四択問題を作成してください。
@@ -81,7 +83,9 @@ const JSON_PLACEHOLDER = `[
 ]`;
 
 export default function ImportPage() {
-  const [file, setFile] = useState<File | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfTitle, setPdfTitle] = useState("");
   const [jsonText, setJsonText] = useState("");
   const [mbText, setMbText] = useState("");
   const [mbTopicId, setMbTopicId] = useState("");
@@ -90,6 +94,7 @@ export default function ImportPage() {
   const [importing, setImporting] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [legacyOpen, setLegacyOpen] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/topics")
@@ -134,11 +139,65 @@ export default function ImportPage() {
     window.setTimeout(() => setPromptCopied(false), 1800);
   };
 
+  const handlePdfSelect = (selectedFile: File | null) => {
+    if (!selectedFile) {
+      setPdfFile(null);
+      return;
+    }
+
+    if (!selectedFile.name.toLowerCase().endsWith(".pdf")) {
+      setPdfFile(null);
+      setResult({
+        imported: 0,
+        errors: ["PDFファイルを選択してください"],
+        total: 0,
+      });
+      return;
+    }
+
+    setPdfFile(selectedFile);
+    if (!pdfTitle.trim()) {
+      setPdfTitle(selectedFile.name.replace(/\.pdf$/i, ""));
+    }
+    setResult(null);
+  };
+
+  const clearPdfSelect = () => {
+    setPdfFile(null);
+    setPdfTitle("");
+    if (pdfInputRef.current) {
+      pdfInputRef.current.value = "";
+    }
+  };
+
+  const uploadPdfIfNeeded = async () => {
+    if (!pdfFile) return null;
+
+    const formData = new FormData();
+    formData.append("file", pdfFile);
+    formData.append("title", pdfTitle.trim() || pdfFile.name.replace(/\.pdf$/i, ""));
+
+    const res = await fetch("/api/materials", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || "PDFの登録に失敗しました");
+    }
+    return data as { id: number; title: string };
+  };
+
   const submitImport = async (body: string, contentType: string) => {
     setImporting(true);
     setResult(null);
     try {
-      const res = await fetch("/api/questions/import", {
+      const material = await uploadPdfIfNeeded();
+      const url = material
+        ? `/api/questions/import?materialId=${material.id}`
+        : "/api/questions/import";
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": contentType },
         body,
@@ -151,12 +210,20 @@ export default function ImportPage() {
           total: 0,
         });
       } else {
-        setResult(data);
+        setResult({ ...data, materialTitle: material?.title });
+        if (material) {
+          setPdfFile(null);
+          setPdfTitle("");
+        }
       }
-    } catch {
+    } catch (error) {
       setResult({
         imported: 0,
-        errors: ["インポート中にエラーが発生しました"],
+        errors: [
+          error instanceof Error
+            ? error.message
+            : "インポート中にエラーが発生しました",
+        ],
         total: 0,
       });
     } finally {
@@ -165,9 +232,12 @@ export default function ImportPage() {
   };
 
   const handleFileImport = async () => {
-    if (!file) return;
-    const isCSV = file.name.toLowerCase().endsWith(".csv");
-    await submitImport(await file.text(), isCSV ? "text/csv" : "application/json");
+    if (!importFile) return;
+    const isCSV = importFile.name.toLowerCase().endsWith(".csv");
+    await submitImport(
+      await importFile.text(),
+      isCSV ? "text/csv" : "application/json",
+    );
   };
 
   const handleTextImport = async () => {
@@ -255,21 +325,60 @@ export default function ImportPage() {
           </div>
 
           <div className="space-y-3">
+            <div className="rounded-lg border bg-gray-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  PDF資料（任意）
+                </label>
+                {pdfFile && (
+                  <button
+                    type="button"
+                    onClick={clearPdfSelect}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                    aria-label="PDF選択を解除"
+                    title="PDF選択を解除"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-white p-6 text-center hover:border-primary-400">
+                <FileText className="h-7 w-7 text-gray-400" />
+                <span className="text-sm text-gray-500">
+                  {pdfFile ? pdfFile.name : "PDFファイルを選択"}
+                </span>
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handlePdfSelect(e.target.files?.[0] || null)}
+                />
+              </label>
+              <input
+                type="text"
+                value={pdfTitle}
+                onChange={(e) => setPdfTitle(e.target.value)}
+                className="mt-2 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                placeholder="PDF資料名"
+              />
+            </div>
+
             <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center hover:border-primary-400">
               <Upload className="h-8 w-8 text-gray-400" />
               <span className="text-sm text-gray-500">
-                {file ? file.name : "JSON / CSV ファイルを選択"}
+                {importFile ? importFile.name : "JSON / CSV ファイルを選択"}
               </span>
               <input
                 type="file"
                 accept=".json,.csv"
                 className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
               />
             </label>
             <button
               onClick={handleFileImport}
-              disabled={!file || importing}
+              disabled={!importFile || importing}
               className="w-full rounded-lg border border-primary-500 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50 disabled:opacity-50"
             >
               {importing ? "インポート中..." : "ファイルをインポート"}
@@ -289,6 +398,11 @@ export default function ImportPage() {
             <p className="font-medium">
               結果: {result.imported} / {result.total} 件インポート成功
             </p>
+            {result.materialTitle && (
+              <p className="mt-1 text-sm text-gray-600">
+                PDF登録: {result.materialTitle}
+              </p>
+            )}
             {result.errors.length > 0 && (
               <div className="mt-2">
                 <p className="text-sm font-medium text-red-600">エラー:</p>

@@ -4,6 +4,8 @@ import type { ImportQuestion } from "@/types";
 
 export async function POST(request: NextRequest) {
   const contentType = request.headers.get("content-type") || "";
+  const defaultMaterialId =
+    Number(request.nextUrl.searchParams.get("materialId")) || null;
   let items: ImportQuestion[];
 
   if (contentType.includes("text/csv")) {
@@ -111,9 +113,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const materialId = item.sourcePdf
+      const matchedMaterialId = item.sourcePdf
         ? materialCache.get(normalizeMaterialName(item.sourcePdf)) ?? null
         : null;
+      const materialId = defaultMaterialId ?? matchedMaterialId;
       const sourceReference =
         item.sourceReference?.trim() ||
         (item.sourcePdf && !materialId ? `PDF: ${item.sourcePdf}` : "");
