@@ -18,9 +18,9 @@ import {
   Loader2,
   Clock,
   Eye,
-  ExternalLink,
 } from "lucide-react";
 import { MarkdownContent } from "@/components/MarkdownContent";
+import { QuestionSourceLink } from "@/components/QuestionSourceLink";
 import type { PracticeQuestion, AnswerRecord } from "@/app/practice/page";
 
 type Props = {
@@ -199,11 +199,6 @@ export function QuestionView({
 
   const recentHistory = question.answerHistories || [];
   const progressPercent = ((index + (answered ? 1 : 0)) / total) * 100;
-  const materialHref = question.material
-    ? `/api/materials/${question.material.id}/file${
-        question.sourcePage ? `#page=${question.sourcePage}` : ""
-      }`
-    : null;
 
   const correctCount = allAnswers.filter((a) => a.isCorrect).length;
   const answeredCount = allAnswers.length;
@@ -405,18 +400,12 @@ export function QuestionView({
               {question.text}
             </p>
           )}
-          {!editing && materialHref && (
-            <a
-              href={materialHref}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100"
-            >
-              元資料PDF
-              {question.sourcePage ? ` p.${question.sourcePage}` : ""}
-              <span className="text-gray-400">/ {question.material?.title}</span>
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+          {!editing && (
+            <QuestionSourceLink
+              material={question.material}
+              sourcePage={question.sourcePage}
+              className="mt-3"
+            />
           )}
         </div>
 

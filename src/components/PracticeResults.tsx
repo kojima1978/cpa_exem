@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   RotateCcw,
   RefreshCw,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { MarkdownContent } from "@/components/MarkdownContent";
+import { QuestionSourceLink } from "@/components/QuestionSourceLink";
 import type { PracticeQuestion, AnswerRecord } from "@/app/practice/page";
 
 type Props = {
@@ -30,6 +31,10 @@ type Props = {
 export function PracticeResults({ questions, answers, onRetry, onRetryWrong, reviewLaterIds }: Props) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [filterTopic, setFilterTopic] = useState<string | null>(null);
+  const questionsById = useMemo(
+    () => new Map(questions.map((question) => [question.id, question])),
+    [questions],
+  );
 
   const totalAnswered = answers.length;
   const correctCount = answers.filter((a) => a.isCorrect).length;
@@ -41,7 +46,7 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
 
   const topicStats = new Map<string, { correct: number; total: number }>();
   for (const answer of answers) {
-    const q = questions.find((q) => q.id === answer.questionId);
+    const q = questionsById.get(answer.questionId);
     if (!q) continue;
     const name = q.topic.name;
     const stat = topicStats.get(name) || { correct: 0, total: 0 };
@@ -60,10 +65,11 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
   const filterByTopic = (list: AnswerRecord[]) =>
     filterTopic
       ? list.filter((a) => {
-          const q = questions.find((q) => q.id === a.questionId);
+          const q = questionsById.get(a.questionId);
           return q?.topic.name === filterTopic;
         })
       : list;
+  const visibleAnswers = filterByTopic(answers);
 
   return (
     <div className="space-y-6">
@@ -153,6 +159,111 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
         </div>
       )}
 
+      {visibleAnswers.length > 0 && (
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold">
+            <Eye className="h-5 w-5 text-primary-500" />
+            解いた問題と元資料 ({visibleAnswers.length}問)
+          </h2>
+          <div className="mt-3 space-y-2">
+            {visibleAnswers.map((answer, answerIndex) => {
+              const q = questionsById.get(answer.questionId);
+              if (!q) return null;
+              const isExpanded = expandedId === q.id;
+              const correctChoice = q.choices.find((c) => c.isCorrect);
+              const chosenChoice = q.choices.find(
+                (c) => c.id === answer.chosenChoiceId,
+              );
+              const statusLabel = answer.skipped
+                ? "保留"
+                : answer.isCorrect
+                  ? "正解"
+                  : "不正解";
+              const statusClass = answer.skipped
+                ? "bg-amber-100 text-amber-700"
+                : answer.isCorrect
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700";
+
+              return (
+                <div key={`${q.id}-${answerIndex}`} className="rounded-lg border">
+                  <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start">
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : q.id)}
+                      className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                    >
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${statusClass}`}
+                      >
+                        {statusLabel}
+                      </span>
+                      <span className="min-w-0 flex-1 text-sm line-clamp-2">
+                        {q.text}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+                      )}
+                    </button>
+                    <QuestionSourceLink
+                      material={q.material}
+                      sourcePage={q.sourcePage}
+                      compact
+                      className="w-fit shrink-0"
+                    />
+                  </div>
+                  {isExpanded && (
+                    <div className="space-y-2 border-t px-4 py-3">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-lg bg-gray-50 p-2 text-sm">
+                          <span className="text-xs text-gray-400">
+                            あなたの回答
+                          </span>
+                          <p
+                            className={
+                              answer.skipped
+                                ? "text-amber-700"
+                                : answer.isCorrect
+                                  ? "text-green-700"
+                                  : "text-red-600"
+                            }
+                          >
+                            {answer.skipped
+                              ? "わからない"
+                              : chosenChoice?.text || "未選択"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-green-50 p-2 text-sm">
+                          <span className="text-xs text-gray-400">正解</span>
+                          <p className="text-green-700">
+                            {correctChoice?.text || "未設定"}
+                          </p>
+                        </div>
+                      </div>
+                      {q.sourceReference && (
+                        <p className="text-xs text-gray-500">
+                          参照: {q.sourceReference}
+                        </p>
+                      )}
+                      {q.briefExplanation && (
+                        <MarkdownContent className="rounded bg-gray-50 p-2 text-gray-600">
+                          {q.briefExplanation}
+                        </MarkdownContent>
+                      )}
+                      <QuestionSourceLink
+                        material={q.material}
+                        sourcePage={q.sourcePage}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Wrong answers */}
       {filterByTopic(wrongAnswers).length > 0 && (
         <div className="rounded-xl border bg-white p-5 shadow-sm">
@@ -162,7 +273,7 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
           </h2>
           <div className="mt-3 space-y-2">
             {filterByTopic(wrongAnswers).map((answer) => {
-              const q = questions.find((q) => q.id === answer.questionId);
+              const q = questionsById.get(answer.questionId);
               if (!q) return null;
               const isExpanded = expandedId === q.id;
               const correctChoice = q.choices.find((c) => c.isCorrect);
@@ -207,6 +318,10 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
                           {q.briefExplanation}
                         </MarkdownContent>
                       )}
+                      <QuestionSourceLink
+                        material={q.material}
+                        sourcePage={q.sourcePage}
+                      />
                     </div>
                   )}
                 </div>
@@ -225,7 +340,7 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
           </h2>
           <div className="mt-3 space-y-2">
             {filterByTopic(skippedAnswers).map((answer) => {
-              const q = questions.find((q) => q.id === answer.questionId);
+              const q = questionsById.get(answer.questionId);
               if (!q) return null;
               const isExpanded = expandedId === q.id;
               const correctChoice = q.choices.find((c) => c.isCorrect);
@@ -260,6 +375,10 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
                           {q.briefExplanation}
                         </MarkdownContent>
                       )}
+                      <QuestionSourceLink
+                        material={q.material}
+                        sourcePage={q.sourcePage}
+                      />
                     </div>
                   )}
                 </div>
@@ -278,12 +397,25 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
           </h2>
           <div className="mt-3 space-y-2">
             {filterByTopic(unsureAnswers).map((answer) => {
-              const q = questions.find((q) => q.id === answer.questionId);
+              const q = questionsById.get(answer.questionId);
               if (!q) return null;
               return (
-                <div key={q.id} className="flex items-start gap-2 rounded-lg border px-4 py-3">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                  <span className="flex-1 text-sm line-clamp-2">{q.text}</span>
+                <div
+                  key={q.id}
+                  className="flex flex-col gap-2 rounded-lg border px-4 py-3 sm:flex-row sm:items-start"
+                >
+                  <div className="flex min-w-0 flex-1 items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                    <span className="min-w-0 flex-1 text-sm line-clamp-2">
+                      {q.text}
+                    </span>
+                  </div>
+                  <QuestionSourceLink
+                    material={q.material}
+                    sourcePage={q.sourcePage}
+                    compact
+                    className="w-fit shrink-0"
+                  />
                 </div>
               );
             })}
@@ -300,7 +432,7 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
           </h2>
           <div className="mt-3 space-y-2">
             {filterByTopic(reviewLaterAnswers).map((answer) => {
-              const q = questions.find((q) => q.id === answer.questionId);
+              const q = questionsById.get(answer.questionId);
               if (!q) return null;
               const isExpanded = expandedId === q.id;
               const correctChoice = q.choices.find((c) => c.isCorrect);
@@ -351,6 +483,10 @@ export function PracticeResults({ questions, answers, onRetry, onRetryWrong, rev
                           {q.briefExplanation}
                         </MarkdownContent>
                       )}
+                      <QuestionSourceLink
+                        material={q.material}
+                        sourcePage={q.sourcePage}
+                      />
                     </div>
                   )}
                 </div>
